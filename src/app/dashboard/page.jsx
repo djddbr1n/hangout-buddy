@@ -68,6 +68,17 @@ export default function DashboardPage() {
     const supabase = createClient()
     if (status) {
       await supabase.from('rsvps').upsert({ hangout_id: hangoutId, user_id: profile.id, status })
+      const hangout = hangouts.find(h => h.id === hangoutId)
+      if (hangout && hangout.creator_id !== profile.id) {
+        await supabase.from('notifications').insert({
+          user_id: hangout.creator_id,
+          type: 'rsvp',
+          actor_id: profile.id,
+          actor_name: profile.name,
+          hangout_id: hangoutId,
+          hangout_title: hangout.title,
+        })
+      }
     } else {
       await supabase.from('rsvps').delete().eq('hangout_id', hangoutId).eq('user_id', profile.id)
     }
@@ -105,9 +116,9 @@ export default function DashboardPage() {
       <div className="px-5 pt-14 pb-4">
         <div className="flex items-center justify-between max-w-md mx-auto mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">what's up 👀</h1>
+            <h1 className="text-2xl font-bold text-gray-900">what's up</h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              {hangouts.length > 0 ? `${hangouts.length} hangout${hangouts.length === 1 ? '' : 's'} from your crew` : 'nothing yet from your crew'}
+              {hangouts.length > 0 ? `${hangouts.length} hangout${hangouts.length === 1 ? '' : 's'} from your crew` : 'nothing from your crew yet'}
             </p>
           </div>
           <motion.button
@@ -126,9 +137,8 @@ export default function DashboardPage() {
       <div className="max-w-md mx-auto px-4 space-y-3 pb-32">
         {hangouts.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
-            <p className="text-5xl mb-3">🫙</p>
             <p className="font-semibold text-gray-500">nothing yet</p>
-            <p className="text-sm mt-1">post something and get the crew together</p>
+            <p className="text-sm mt-1 text-gray-400">post something and get the crew together</p>
           </div>
         ) : (
           hangouts.map((h, i) => (

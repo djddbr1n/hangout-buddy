@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { UserPlus, Search, ChevronRight, Eye, Shield, Check, X } from 'lucide-react'
+import { UserPlus, Search, ChevronRight, Eye, Shield, Check, X, Calendar } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
+import { format } from 'date-fns'
 import { FriendProfileSheet } from '@/components/friends/FriendProfileSheet'
 import { createClient } from '@/lib/supabase-client'
 import { useAuth } from '@/hooks/useAuth'
@@ -18,6 +20,8 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [addedIds, setAddedIds] = useState(new Set())
+  const [inviteTarget, setInviteTarget] = useState(null)
+  const [myHangouts, setMyHangouts] = useState([])
 
   useEffect(() => {
     if (!profile) return
@@ -46,22 +50,24 @@ export default function FriendsPage() {
     const supabase = createClient()
     await Promise.all([
       supabase.from('friendships').update({ status: 'accepted' }).eq('id', req.id),
-      supabase.from('friendships').insert({
-        user_id: profile.id,
-        friend_id: req.user_id,
-        status: 'accepted',
-        auth_level: 'invite_only',
-      }),
+      // upsert handles the case where the recipient already sent a request back
+      supabase.from('friendships').upsert(
+        { user_id: profile.id, friend_id: req.user_id, status: 'accepted', auth_level: 'invite_only' },
+        { onConflict: 'user_id,friend_id' }
+      ),
     ])
+    await supabase.from('notifications').insert({
+      user_id: req.user_id,
+      type: 'friend_accepted',
+      actor_id: profile.id,
+      actor_name: profile.name,
+    })
     setPendingRequests(prev => prev.filter(r => r.id !== req.id))
-    setFriendships(prev => [...prev, {
-      id: `new-${req.id}`,
-      user_id: profile.id,
-      friend_id: req.user_id,
-      status: 'accepted',
-      auth_level: 'invite_only',
-      friend: req.requester,
-    }])
+    setFriendships(prev => {
+      const exists = prev.find(f => f.friend_id === req.user_id)
+      if (exists) return prev.map(f => f.friend_id === req.user_id ? { ...f, status: 'accepted' } : f)
+      return [...prev, { id: `new-${req.id}`, user_id: profile.id, friend_id: req.user_id, status: 'accepted', auth_level: 'invite_only', friend: req.requester }]
+    })
   }
 
   async function declineRequest(req) {
@@ -102,13 +108,51 @@ export default function FriendsPage() {
   async function addFriend(friendId) {
     if (!profile) return
     const supabase = createClient()
+    // check for existing friendship in either direction
+    const { data: existing } = await supabase
+      .from('friendships')
+      .select('id')
+      .or(`and(user_id.eq.${profile.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${profile.id})`)
+    if (existing?.length > 0) { setAddedIds(prev => new Set([...prev, friendId])); return }
     await supabase.from('friendships').insert({
       user_id: profile.id,
       friend_id: friendId,
       status: 'pending',
       auth_level: 'invite_only',
     })
+    await supabase.from('notifications').insert({
+      user_id: friendId,
+      type: 'friend_request',
+      actor_id: profile.id,
+      actor_name: profile.name,
+    })
     setAddedIds(prev => new Set([...prev, friendId]))
+  }
+
+  async function handleInvite(friendId) {
+    setSelected(null)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('hangout_posts')
+      .select('id,title,date_time')
+      .eq('creator_id', profile.id)
+      .eq('status', 'open')
+      .order('date_time', { ascending: true })
+    setMyHangouts(data ?? [])
+    setInviteTarget(friendId)
+  }
+
+  async function sendInvite(hangout) {
+    const supabase = createClient()
+    await supabase.from('notifications').insert({
+      user_id: inviteTarget,
+      type: 'invite',
+      actor_id: profile.id,
+      actor_name: profile.name,
+      hangout_id: hangout.id,
+      hangout_title: hangout.title,
+    })
+    setInviteTarget(null)
   }
 
   async function handleAuthLevel(id, level) {
@@ -118,10 +162,12 @@ export default function FriendsPage() {
     setSelected(s => s ? { ...s, friendship: { ...s.friendship, auth_level: level } } : null)
   }
 
-  const filtered = friendships.filter(f =>
-    f.friend?.name?.toLowerCase().includes(query.toLowerCase()) ||
-    f.friend?.nickname?.toLowerCase().includes(query.toLowerCase())
-  )
+  const filtered = friendships
+    .filter((f, i, arr) => arr.findIndex(x => x.friend_id === f.friend_id) === i)
+    .filter(f =>
+      f.friend?.name?.toLowerCase().includes(query.toLowerCase()) ||
+      f.friend?.nickname?.toLowerCase().includes(query.toLowerCase())
+    )
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -129,7 +175,7 @@ export default function FriendsPage() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-bold text-gray-900">
-              your crew 🤝
+              your crew
               {pendingRequests.length > 0 && (
                 <span className="ml-2 text-xs bg-violet-500 text-white rounded-full px-1.5 py-0.5 font-semibold">{pendingRequests.length}</span>
               )}
@@ -230,9 +276,8 @@ export default function FriendsPage() {
         {/* accepted friends */}
         {filtered.length === 0 && pendingRequests.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
-            <p className="text-4xl mb-3">👋</p>
             <p className="font-semibold text-gray-500">no friends yet</p>
-            <p className="text-sm mt-1">tap "add friend" to find people</p>
+            <p className="text-sm mt-1 text-gray-400">tap "add friend" to find people</p>
           </div>
         ) : filtered.length > 0 ? (
           <>
@@ -269,6 +314,56 @@ export default function FriendsPage() {
         ) : null}
       </div>
 
+      {/* invite to hangout sheet */}
+      <AnimatePresence>
+        {inviteTarget && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setInviteTarget(null)}
+              className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[70vh] overflow-y-auto"
+            >
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-gray-200" />
+              </div>
+              <div className="px-5 pb-8">
+                <div className="flex items-center justify-between py-3">
+                  <h2 className="font-bold text-gray-900">invite to a hangout</h2>
+                  <button onClick={() => setInviteTarget(null)} className="p-2 rounded-full hover:bg-gray-100">
+                    <X size={16} className="text-gray-400" />
+                  </button>
+                </div>
+                {myHangouts.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">you don't have any open hangouts yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {myHangouts.map(h => (
+                      <motion.button
+                        key={h.id}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => sendInvite(h)}
+                        className="w-full flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3 text-left hover:bg-violet-50 transition-colors"
+                      >
+                        <Calendar size={16} className="text-violet-400 shrink-0" />
+                        <div>
+                          <p className="font-medium text-sm text-gray-800">{h.title}</p>
+                          <p className="text-xs text-gray-400">{format(new Date(h.date_time), 'EEE, MMM d · h:mm a')}</p>
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <FriendProfileSheet
         friend={selected?.friend ?? null}
         availability={selected ? (friendAvailability[selected.friend.id] ?? null) : null}
@@ -276,7 +371,7 @@ export default function FriendsPage() {
         open={!!selected}
         onClose={() => setSelected(null)}
         onAuthLevelChange={(level) => selected && handleAuthLevel(selected.friendship.id, level)}
-        onInvite={(id) => { console.log('invite', id); setSelected(null) }}
+        onInvite={handleInvite}
       />
     </div>
   )
