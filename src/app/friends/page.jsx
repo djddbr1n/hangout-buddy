@@ -42,7 +42,7 @@ export default function FriendsPage() {
       .eq('user_id', friendId)
     const avail = {}
     for (const row of data ?? []) {
-      const day = row.day_index|1|2|3|4|5|6
+      const day = row.day_index
       if (!avail[day]) avail[day] = {}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(avail[day])[row.block] = row.available

@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 
-const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','🐙','🦋','🐧','🦜','🐺','🦔','🐝','🦊','🐮','🐻‍❄️','🦩']
+const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','🐙','🐧','🦜','🐺','🦔','🐝','🐮','🐻‍❄️','🦩']
 
 export default function SignupPage() {
   const router = useRouter()
@@ -17,6 +17,7 @@ export default function SignupPage() {
   const [name, setName] = useState('')
   const [nickname, setNickname] = useState('')
   const [avatar, setAvatar] = useState('🦊')
+  const [customMode, setCustomMode] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -92,15 +93,39 @@ export default function SignupPage() {
                       <motion.button
                         key={e}
                         whileTap={{ scale: 0.85 }}
-                        onClick={() => setAvatar(e)}
+                        onClick={() => { setAvatar(e); setCustomMode(false) }}
                         className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${
-                          avatar === e ? 'bg-violet-100 ring-2 ring-violet-400 scale-110' : 'bg-gray-50 hover:bg-gray-100'
+                          avatar === e && !customMode ? 'bg-violet-100 ring-2 ring-violet-400 scale-110' : 'bg-gray-50 hover:bg-gray-100'
                         }`}
                       >
                         {e}
                       </motion.button>
                     ))}
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => setCustomMode(true)}
+                      className={`w-10 h-10 rounded-xl text-xs font-semibold flex items-center justify-center transition-all ${
+                        customMode ? 'bg-violet-100 ring-2 ring-violet-400' : 'bg-gray-50 hover:bg-gray-100 text-gray-400'
+                      }`}
+                    >
+                      ✏️
+                    </motion.button>
                   </div>
+                  {customMode && (
+                    <div className="mt-2">
+                      <input
+                        autoFocus
+                        maxLength={2}
+                        placeholder="type any emoji"
+                        className="w-full rounded-xl border border-violet-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                        onChange={e => {
+                          const val = [...e.target.value].slice(-1).join('')
+                          if (val) setAvatar(val)
+                        }}
+                      />
+                      <p className="text-xs text-gray-400 mt-1">paste or type any emoji — preview: <span className="text-lg">{avatar}</span></p>
+                    </div>
+                  )}
                 </div>
 
                 <div>

@@ -2,14 +2,59 @@
 
 export const dynamic = 'force-dynamic'
 
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Calendar, LogOut, ChevronRight } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase-client'
+
+const TIME_BLOCKS = [
+  { key: 'early_morning', emoji: '🌅' },
+  { key: 'brunch',        emoji: '☕' },
+  { key: 'afternoon',     emoji: '🌤' },
+  { key: 'dinner',        emoji: '🌆' },
+  { key: 'late_night',    emoji: '🌙' },
+]
+const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
 export default function ProfilePage() {
   const { profile, loading, signOut } = useAuth()
   const router = useRouter()
+  const [availability, setAvailability] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!profile) return
+    const supabase = createClient()
+    supabase
+      .from('availability')
+      .select('day_index,block,available')
+      .eq('user_id', profile.id)
+      .then(({ data }) => {
+        const avail = {}
+        for (const row of data ?? []) {
+          avail[`${row.day_index}-${row.block}`] = row.available
+        }
+        setAvailability(avail)
+      })
+  }, [profile?.id])
+
+  async function toggleCell(dayIndex, block) {
+    if (!profile) return
+    const key = `${dayIndex}-${block}`
+    const next = !availability[key]
+    setAvailability(prev => ({ ...prev, [key]: next }))
+    setSaving(true)
+    const supabase = createClient()
+    await supabase.from('availability').upsert({
+      user_id: profile.id,
+      day_index: dayIndex,
+      block,
+      available: next,
+    })
+    setSaving(false)
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -37,45 +82,43 @@ export default function ProfilePage() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-5 space-y-3 pb-28">
-        {/* gcal */}
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">integrations</p>
-          </div>
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors"
-          >
-            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
-              <Calendar size={18} className="text-blue-500" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-gray-800">Connect Google Calendar</p>
-              <p className="text-xs text-gray-400">Let friends see when you're free</p>
-            </div>
-            <ChevronRight size={16} className="text-gray-300" />
-          </motion.button>
-        </div>
-
-        {/* availability */}
+        {/* availability editor */}
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">my availability this week</p>
-          <div className="grid grid-cols-7 gap-1">
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
-              <div key={i} className="flex flex-col items-center gap-1">
-                <span className="text-xs text-gray-400">{day}</span>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium ${
-                  [0, 2, 4].includes(i) ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-50 text-gray-300'
-                }`}>
-                  {[0, 2, 4].includes(i) ? '✓' : '·'}
-                </div>
-              </div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">my availability</p>
+            {saving && <p className="text-xs text-violet-400">saving...</p>}
+          </div>
+
+          {/* day headers */}
+          <div className="grid grid-cols-8 gap-1 mb-1">
+            <div />
+            {DAYS.map((d, i) => (
+              <div key={i} className="text-center text-xs font-semibold text-gray-400">{d}</div>
             ))}
           </div>
-          <p className="text-xs text-gray-400 mt-2 text-center">sync GCal to auto-update ↑</p>
+
+          {/* block rows */}
+          {TIME_BLOCKS.map(({ key: block, emoji }) => (
+            <div key={block} className="grid grid-cols-8 gap-1 mb-1">
+              <div className="flex items-center justify-center text-sm">{emoji}</div>
+              {Array.from({ length: 7 }, (_, dayIndex) => {
+                const isFree = availability[`${dayIndex}-${block}`]
+                return (
+                  <motion.button
+                    key={dayIndex}
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => toggleCell(dayIndex, block)}
+                    className={`h-9 rounded-lg transition-colors ${isFree ? 'bg-emerald-400' : 'bg-gray-100'}`}
+                  />
+                )
+              })}
+            </div>
+          ))}
+
+          <p className="text-xs text-gray-400 text-center mt-2">green = free · tap to toggle</p>
         </div>
 
-        {/* account */}
+        {/* sign out */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <motion.button
             whileTap={{ scale: 0.98 }}
