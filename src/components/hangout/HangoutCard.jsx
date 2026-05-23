@@ -16,8 +16,9 @@ export function HangoutCard({ hangout, currentUser, friendIds, onOpen, isInvited
   const spotsLeft = hangout.max_people - 1 - goingCount
   const isMine = hangout.creator_id === currentUser.id
   const isFull = spotsLeft <= 0 && !myRSVP
+  // invited cards get a distinct indigo-tinted header; others use activity color
   const gradientClass = isInvited
-    ? 'from-violet-100 to-pink-100'
+    ? 'from-indigo-50 to-violet-50'
     : (ACTIVITY_COLORS[hangout.activity ?? ''] ?? ACTIVITY_COLORS['default'])
   const friendAttendees = hangout.rsvps?.filter(r => friendIds.includes(r.user_id) && r.user_id !== currentUser.id) ?? []
 
@@ -29,7 +30,7 @@ export function HangoutCard({ hangout, currentUser, friendIds, onOpen, isInvited
       whileTap={{ scale: 0.98 }}
       onClick={() => onOpen(hangout)}
       className={`w-full bg-white rounded-3xl shadow-sm border overflow-hidden text-left ${
-        isInvited ? 'border-violet-200 shadow-md shadow-violet-100/60' : 'border-gray-100'
+        isInvited ? 'border-indigo-200' : 'border-gray-100'
       }`}
     >
       {/* gradient header */}

@@ -11,11 +11,37 @@ import { useAuth } from '@/hooks/useAuth'
 import { getCache, setCache } from '@/lib/page-cache'
 import { sendPushToUser } from '@/app/actions'
 
+// Read cached profile id synchronously so state initialises before first paint
+const _cachedProfileId = getCache('auth-profile')?.id
+
+function friendsKey(id) { return `friends-${id}` }
+function availKey(id)   { return `avail-${id}` }
+
+function FriendSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 flex items-center gap-3">
+      <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3 bg-gray-100 rounded-full animate-pulse w-28" />
+        <div className="h-2.5 bg-gray-100 rounded-full animate-pulse w-20" />
+      </div>
+      <div className="h-5 w-24 bg-gray-100 rounded-full animate-pulse" />
+    </div>
+  )
+}
+
 export default function FriendsPage() {
   const { profile } = useAuth()
-  const [friendships, setFriendships] = useState([])
-  const [pendingRequests, setPendingRequests] = useState([])
+
+  // ── Synchronous cache init: no blank-state flash on re-mount ──────────────
+  const [friendships, setFriendships] = useState(
+    () => getCache(friendsKey(_cachedProfileId))?.friendships ?? []
+  )
+  const [pendingRequests, setPendingRequests] = useState(
+    () => getCache(friendsKey(_cachedProfileId))?.pendingRequests ?? []
+  )
   const [friendAvailability, setFriendAvailability] = useState({})
+
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -24,13 +50,17 @@ export default function FriendsPage() {
   const [addedIds, setAddedIds] = useState(new Set())
   const [inviteTarget, setInviteTarget] = useState(null)
   const [myHangouts, setMyHangouts] = useState([])
+  // True only when we have no cached data yet and are waiting for first load
+  const [firstLoad, setFirstLoad] = useState(!getCache(friendsKey(_cachedProfileId)))
 
   useEffect(() => {
     if (!profile) return
-    const cached = getCache(`friends-${profile.id}`)
+    // If profile changed (different user), re-read the correct cache slice
+    const cached = getCache(friendsKey(profile.id))
     if (cached) {
       setFriendships(cached.friendships)
       setPendingRequests(cached.pendingRequests)
+      setFirstLoad(false)
     }
     fetchFriends()
   }, [profile?.id])
@@ -40,35 +70,65 @@ export default function FriendsPage() {
     const [{ data: accepted }, { data: pending }] = await Promise.all([
       supabase
         .from('friendships')
-        .select('*, friend:profiles!friend_id(id,name,nickname,avatar_emoji)')
+        .select('id,user_id,friend_id,status,auth_level,friend:profiles!friend_id(id,name,nickname,avatar_emoji)')
         .eq('user_id', profile.id)
         .eq('status', 'accepted'),
       supabase
         .from('friendships')
-        .select('*, requester:profiles!user_id(id,name,nickname,avatar_emoji)')
+        .select('id,user_id,friend_id,status,requester:profiles!user_id(id,name,nickname,avatar_emoji)')
         .eq('friend_id', profile.id)
         .eq('status', 'pending'),
     ])
     setFriendships(accepted ?? [])
     setPendingRequests(pending ?? [])
-    setCache(`friends-${profile.id}`, { friendships: accepted ?? [], pendingRequests: pending ?? [] })
+    setFirstLoad(false)
+    setCache(friendsKey(profile.id), { friendships: accepted ?? [], pendingRequests: pending ?? [] })
+
+    // Background-prefetch availability for every friend so their profile opens instantly
+    for (const f of accepted ?? []) {
+      prefetchAvailability(f.friend_id)
+    }
+  }
+
+  // ── Availability: persisted in page-cache across tab switches ─────────────
+  async function prefetchAvailability(friendId) {
+    const cached = getCache(availKey(friendId))
+    if (cached) {
+      setFriendAvailability(prev => ({ ...prev, [friendId]: cached }))
+      return
+    }
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('availability')
+      .select('day_index,block,available')
+      .eq('user_id', friendId)
+    const avail = {}
+    for (const row of data ?? []) {
+      if (!avail[row.day_index]) avail[row.day_index] = {}
+      avail[row.day_index][row.block] = row.available
+    }
+    setCache(availKey(friendId), avail)
+    setFriendAvailability(prev => ({ ...prev, [friendId]: avail }))
+  }
+
+  // Called when opening a friend's profile — instant if prefetch already ran
+  function openFriend(f) {
+    setSelected({ friend: f.friend, friendship: f })
+    prefetchAvailability(f.friend_id)
   }
 
   async function acceptRequest(req) {
     const supabase = createClient()
     await Promise.all([
       supabase.from('friendships').update({ status: 'accepted' }).eq('id', req.id),
-      // upsert handles the case where the recipient already sent a request back
       supabase.from('friendships').upsert(
         { user_id: profile.id, friend_id: req.user_id, status: 'accepted', auth_level: 'invite_only' },
         { onConflict: 'user_id,friend_id' }
       ),
     ])
     await supabase.from('notifications').insert({
-      user_id: req.user_id,
-      type: 'friend_accepted',
-      actor_id: profile.id,
-      actor_name: profile.name,
+      user_id: req.user_id, type: 'friend_accepted',
+      actor_id: profile.id, actor_name: profile.name,
     })
     sendPushToUser(req.user_id, 'friend request accepted', `${profile.name} accepted your friend request`).catch(() => {})
     setPendingRequests(prev => prev.filter(r => r.id !== req.id))
@@ -83,22 +143,6 @@ export default function FriendsPage() {
     const supabase = createClient()
     await supabase.from('friendships').delete().eq('id', req.id)
     setPendingRequests(prev => prev.filter(r => r.id !== req.id))
-  }
-
-  async function fetchFriendAvailability(friendId) {
-    if (friendAvailability[friendId]) return
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('availability')
-      .select('day_index,block,available')
-      .eq('user_id', friendId)
-    const avail = {}
-    for (const row of data ?? []) {
-      const day = row.day_index
-      if (!avail[day]) avail[day] = {}
-      ;(avail[day])[row.block] = row.available
-    }
-    setFriendAvailability(prev => ({ ...prev, [friendId]: avail }))
   }
 
   async function searchUsers(q) {
@@ -117,24 +161,12 @@ export default function FriendsPage() {
   async function addFriend(friendId) {
     if (!profile) return
     const supabase = createClient()
-    // check for existing friendship in either direction
     const { data: existing } = await supabase
-      .from('friendships')
-      .select('id')
+      .from('friendships').select('id')
       .or(`and(user_id.eq.${profile.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${profile.id})`)
     if (existing?.length > 0) { setAddedIds(prev => new Set([...prev, friendId])); return }
-    await supabase.from('friendships').insert({
-      user_id: profile.id,
-      friend_id: friendId,
-      status: 'pending',
-      auth_level: 'invite_only',
-    })
-    await supabase.from('notifications').insert({
-      user_id: friendId,
-      type: 'friend_request',
-      actor_id: profile.id,
-      actor_name: profile.name,
-    })
+    await supabase.from('friendships').insert({ user_id: profile.id, friend_id: friendId, status: 'pending', auth_level: 'invite_only' })
+    await supabase.from('notifications').insert({ user_id: friendId, type: 'friend_request', actor_id: profile.id, actor_name: profile.name })
     sendPushToUser(friendId, 'new friend request', `${profile.name} wants to be friends`).catch(() => {})
     setAddedIds(prev => new Set([...prev, friendId]))
   }
@@ -143,11 +175,8 @@ export default function FriendsPage() {
     setSelected(null)
     const supabase = createClient()
     const { data } = await supabase
-      .from('hangout_posts')
-      .select('id,title,date_time')
-      .eq('creator_id', profile.id)
-      .eq('status', 'open')
-      .order('date_time', { ascending: true })
+      .from('hangout_posts').select('id,title,date_time')
+      .eq('creator_id', profile.id).eq('status', 'open').order('date_time', { ascending: true })
     setMyHangouts(data ?? [])
     setInviteTarget(friendId)
   }
@@ -155,12 +184,9 @@ export default function FriendsPage() {
   async function sendInvite(hangout) {
     const supabase = createClient()
     await supabase.from('notifications').insert({
-      user_id: inviteTarget,
-      type: 'invite',
-      actor_id: profile.id,
-      actor_name: profile.name,
-      hangout_id: hangout.id,
-      hangout_title: hangout.title,
+      user_id: inviteTarget, type: 'invite',
+      actor_id: profile.id, actor_name: profile.name,
+      hangout_id: hangout.id, hangout_title: hangout.title,
     })
     sendPushToUser(inviteTarget, `${profile.name} invited you`, `"${hangout.title}" — you're on the list`).catch(() => {})
     setInviteTarget(null)
@@ -264,18 +290,12 @@ export default function FriendsPage() {
                   <p className="text-xs text-gray-400">@{req.requester?.nickname}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => acceptRequest(req)}
-                    className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center"
-                  >
+                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => acceptRequest(req)}
+                    className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
                     <Check size={14} />
                   </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => declineRequest(req)}
-                    className="w-8 h-8 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center"
-                  >
+                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => declineRequest(req)}
+                    className="w-8 h-8 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center">
                     <X size={14} />
                   </motion.button>
                 </div>
@@ -284,13 +304,22 @@ export default function FriendsPage() {
           </div>
         )}
 
-        {/* accepted friends */}
-        {filtered.length === 0 && pendingRequests.length === 0 ? (
+        {/* skeleton while first-loading */}
+        {firstLoad && (
+          <div className="space-y-2">
+            {[0, 1, 2].map(i => <FriendSkeleton key={i} />)}
+          </div>
+        )}
+
+        {/* friend list */}
+        {!firstLoad && filtered.length === 0 && pendingRequests.length === 0 && (
           <div className="text-center py-16 text-gray-400">
             <p className="font-semibold text-gray-500">no friends yet</p>
             <p className="text-sm mt-1 text-gray-400">tap "add friend" to find people</p>
           </div>
-        ) : filtered.length > 0 ? (
+        )}
+
+        {!firstLoad && filtered.length > 0 && (
           <>
             <p className="text-xs text-gray-400 px-1">{filtered.length} friend{filtered.length !== 1 ? 's' : ''} · tap to view profile</p>
             {filtered.map((f, i) => (
@@ -300,7 +329,7 @@ export default function FriendsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => { setSelected({ friend: f.friend, friendship: f }); fetchFriendAvailability(f.friend_id) }}
+                onClick={() => openFriend(f)}
                 className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 flex items-center gap-3 text-left"
               >
                 <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-xl shrink-0">
@@ -322,10 +351,10 @@ export default function FriendsPage() {
               </motion.button>
             ))}
           </>
-        ) : null}
+        )}
       </div>
 
-      {/* invite to hangout sheet */}
+      {/* invite sheet */}
       <AnimatePresence>
         {inviteTarget && (
           <>
@@ -354,12 +383,8 @@ export default function FriendsPage() {
                 ) : (
                   <div className="space-y-2">
                     {myHangouts.map(h => (
-                      <motion.button
-                        key={h.id}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => sendInvite(h)}
-                        className="w-full flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3 text-left hover:bg-violet-50 transition-colors"
-                      >
+                      <motion.button key={h.id} whileTap={{ scale: 0.98 }} onClick={() => sendInvite(h)}
+                        className="w-full flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3 text-left hover:bg-violet-50 transition-colors">
                         <Calendar size={16} className="text-violet-400 shrink-0" />
                         <div>
                           <p className="font-medium text-sm text-gray-800">{h.title}</p>

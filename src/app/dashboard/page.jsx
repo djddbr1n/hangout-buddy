@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, Bell } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Plus, Bell, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { format } from 'date-fns'
 import { HangoutCard } from '@/components/hangout/HangoutCard'
 import { CreateHangoutSheet } from '@/components/hangout/CreateHangoutSheet'
 import { HangoutDetailSheet } from '@/components/hangout/HangoutDetailSheet'
@@ -13,6 +14,124 @@ import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase-client'
 import { getCache, setCache } from '@/lib/page-cache'
 import { sendPushToUser } from '@/app/actions'
+
+// ── My Events: folded stack that expands ──────────────────────────────────────
+function MyEventsSection({ events, profile, friendIds, onOpen }) {
+  const [expanded, setExpanded] = useState(false)
+  if (events.length === 0) return null
+
+  const peek = Math.min(events.length - 1, 2)
+  const top = events[0]
+  const isTopHosting = top.creator_id === profile.id
+
+  return (
+    <div className="mb-1">
+      {/* section header */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-1 mb-3 group"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">my events</span>
+          <span className="text-[11px] bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5 font-semibold">
+            {events.length}
+          </span>
+        </div>
+        <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+          <ChevronDown size={14} className="text-gray-400" />
+        </motion.div>
+      </button>
+
+      <AnimatePresence mode="wait">
+        {!expanded ? (
+          /* ── Collapsed: stacked card peek ── */
+          <motion.div
+            key="collapsed"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
+            className="relative cursor-pointer select-none"
+            style={{ paddingBottom: peek * 7 }}
+            onClick={() => setExpanded(true)}
+          >
+            {/* Ghost cards behind (bottom ones first) */}
+            {Array.from({ length: peek }).map((_, i) => (
+              <div
+                key={i}
+                className="absolute inset-x-0 bottom-0 bg-white rounded-3xl border border-gray-100"
+                style={{
+                  height: 88,
+                  bottom: i * 7,
+                  transform: `scaleX(${1 - (peek - i) * 0.03})`,
+                  transformOrigin: 'bottom center',
+                  zIndex: i,
+                  opacity: 0.35 + i * 0.25,
+                }}
+              />
+            ))}
+
+            {/* Top card — compact preview */}
+            <div className="relative z-10 bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-5 pt-3.5 pb-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        isTopHosting
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {isTopHosting ? '🏠 hosting' : '✓ going'}
+                      </span>
+                      {events.length > 1 && (
+                        <span className="text-[11px] text-gray-400 font-medium">+{events.length - 1} more</span>
+                      )}
+                    </div>
+                    <p className="font-bold text-gray-900 text-[15px] leading-snug">{top.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {format(new Date(top.date_time), 'EEE, MMM d · h:mm a')}
+                    </p>
+                  </div>
+                  <span className="text-2xl shrink-0">{top.creator?.avatar_emoji ?? '👤'}</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          /* ── Expanded: labeled full cards ── */
+          <motion.div
+            key="expanded"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
+            className="space-y-4"
+          >
+            {events.map((h, i) => {
+              const hosting = h.creator_id === profile.id
+              return (
+                <motion.div
+                  key={h.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5 px-1">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      hosting ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {hosting ? '🏠 hosting' : '✓ going'}
+                    </span>
+                  </div>
+                  <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={onOpen} />
+                </motion.div>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const { profile } = useAuth()
@@ -203,40 +322,57 @@ export default function DashboardPage() {
       </div>
 
       <div className="max-w-md mx-auto px-4 pb-32">
-        {hangouts.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <p className="font-semibold text-gray-500">nothing yet</p>
-            <p className="text-sm mt-1 text-gray-400">post a hangout and see who's down</p>
-          </div>
-        ) : (() => {
-          const invited = hangouts.filter(h => invitedHangoutIds.has(h.id) && h.creator_id !== profile.id)
-          const others  = hangouts.filter(h => !invitedHangoutIds.has(h.id) || h.creator_id === profile.id)
+        {(() => {
+          // events i'm hosting or going to → folded section
+          const myEvents = hangouts.filter(h =>
+            h.creator_id === profile.id ||
+            h.rsvps?.some(r => r.user_id === profile.id && r.status === 'going')
+          )
+          const myEventIds = new Set(myEvents.map(h => h.id))
+          // everything else → main feed
+          const feedHangouts = hangouts.filter(h => !myEventIds.has(h.id))
+
           return (
             <div className="space-y-5">
-              {invited.length > 0 && (
+              {/* ── My events (folded) ── */}
+              <MyEventsSection
+                events={myEvents}
+                profile={profile}
+                friendIds={friendIds}
+                onOpen={setDetailHangout}
+              />
+
+              {/* ── All hangouts feed ── */}
+              {feedHangouts.length === 0 && myEvents.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="font-semibold text-gray-500">nothing yet</p>
+                  <p className="text-sm mt-1 text-gray-400">post a hangout and see who's down</p>
+                </div>
+              ) : feedHangouts.length > 0 ? (
                 <div>
-                  <p className="text-xs font-semibold text-violet-500 uppercase tracking-wide px-1 mb-2.5">invited for you</p>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide px-1 mb-3">
+                    all hangouts
+                  </p>
                   <div className="space-y-3">
-                    {invited.map((h, i) => (
-                      <motion.div key={h.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-                        <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={setDetailHangout} isInvited />
+                    {feedHangouts.map((h, i) => (
+                      <motion.div
+                        key={h.id}
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                      >
+                        <HangoutCard
+                          hangout={h}
+                          currentUser={profile}
+                          friendIds={friendIds}
+                          onOpen={setDetailHangout}
+                          isInvited={invitedHangoutIds.has(h.id)}
+                        />
                       </motion.div>
                     ))}
                   </div>
                 </div>
-              )}
-              {others.length > 0 && (
-                <div>
-                  {invited.length > 0 && <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2.5">all hangouts</p>}
-                  <div className="space-y-3">
-                    {others.map((h, i) => (
-                      <motion.div key={h.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-                        <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={setDetailHangout} />
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              ) : null}
             </div>
           )
         })()}

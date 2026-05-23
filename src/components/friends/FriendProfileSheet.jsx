@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Lock, Plus } from 'lucide-react'
+import { X, Lock, Plus, Eye, Shield } from 'lucide-react'
 
 const DAYS = [
   { label: 'Monday', short: 'Mon' },
@@ -84,6 +84,48 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, o
                   <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
                     <X size={16} className="text-gray-400" />
                   </button>
+                </div>
+              </div>
+
+              {/* access level toggle */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">their access to your calendar</p>
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onAuthLevelChange('invite_only')}
+                    className={`flex-1 rounded-2xl border-2 px-3 py-3 text-left transition-all ${
+                      !canSeeAvailability
+                        ? 'border-violet-300 bg-violet-50'
+                        : 'border-gray-100 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield size={14} className={!canSeeAvailability ? 'text-violet-500' : 'text-gray-400'} />
+                      <span className={`text-sm font-semibold ${!canSeeAvailability ? 'text-violet-700' : 'text-gray-500'}`}>
+                        invite only
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-snug">they can only see hangouts you invite them to</p>
+                  </motion.button>
+
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onAuthLevelChange('can_see_availability')}
+                    className={`flex-1 rounded-2xl border-2 px-3 py-3 text-left transition-all ${
+                      canSeeAvailability
+                        ? 'border-violet-300 bg-violet-50'
+                        : 'border-gray-100 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Eye size={14} className={canSeeAvailability ? 'text-violet-500' : 'text-gray-400'} />
+                      <span className={`text-sm font-semibold ${canSeeAvailability ? 'text-violet-700' : 'text-gray-500'}`}>
+                        see availability
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-snug">they can see your free slots each week</p>
+                  </motion.button>
                 </div>
               </div>
 
