@@ -43,7 +43,9 @@ export function HangoutCard({ hangout, currentUser, friendIds, onOpen, isInvited
           <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
             isFull ? 'bg-red-100 text-red-500' : spotsLeft === 1 ? 'bg-orange-100 text-orange-500' : 'bg-white/70 text-gray-500'
           }`}>
-            {isFull ? 'full' : `${spotsLeft} open`}
+            {isFull ? 'full' : hangout.min_people && hangout.min_people !== hangout.max_people
+              ? `${hangout.min_people}–${hangout.max_people} ppl`
+              : `${spotsLeft} open`}
           </span>
         </div>
 

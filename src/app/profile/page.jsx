@@ -4,10 +4,11 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, Settings, X, Check } from 'lucide-react'
+import { LogOut, Settings, X, Bell, BellOff, Smartphone } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
+import { usePush } from '@/hooks/usePush'
 
 const TIME_BLOCKS = [
   { key: 'early_morning', emoji: '🌅', label: 'Early', time: 'before 10am' },
@@ -23,6 +24,7 @@ const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','
 export default function ProfilePage() {
   const { profile, loading, signOut } = useAuth()
   const router = useRouter()
+  const { supported: pushSupported, subscription: pushSub, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePush(profile?.id)
   const [availability, setAvailability] = useState({})
   const [saving, setSaving] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -249,6 +251,37 @@ export default function ProfilePage() {
                 >
                   {profileSaving ? 'saving...' : 'save changes'}
                 </motion.button>
+
+                {/* push notifications */}
+                {pushSupported && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">notifications</label>
+                    <div className="mt-2 flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        {pushSub ? <Bell size={16} className="text-violet-500" /> : <BellOff size={16} className="text-gray-400" />}
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{pushSub ? 'notifications on' : 'notifications off'}</p>
+                          <p className="text-xs text-gray-400">{pushSub ? 'you\'ll get push alerts' : 'tap to enable'}</p>
+                        </div>
+                      </div>
+                      <motion.button
+                        whileTap={{ scale: 0.92 }}
+                        onClick={pushSub ? pushUnsubscribe : pushSubscribe}
+                        disabled={pushLoading}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 ${
+                          pushSub ? 'bg-gray-200 text-gray-600' : 'bg-violet-500 text-white'
+                        }`}
+                      >
+                        {pushLoading ? '…' : pushSub ? 'turn off' : 'enable'}
+                      </motion.button>
+                    </div>
+                    {!pushSub && (
+                      <p className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1 px-1">
+                        <Smartphone size={10} /> on iPhone: add to home screen first, then enable here
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </>

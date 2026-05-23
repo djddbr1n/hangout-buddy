@@ -8,6 +8,8 @@ import { format } from 'date-fns'
 import { FriendProfileSheet } from '@/components/friends/FriendProfileSheet'
 import { createClient } from '@/lib/supabase-client'
 import { useAuth } from '@/hooks/useAuth'
+import { getCache, setCache } from '@/lib/page-cache'
+import { sendPushToUser } from '@/app/actions'
 
 export default function FriendsPage() {
   const { profile } = useAuth()
@@ -25,6 +27,11 @@ export default function FriendsPage() {
 
   useEffect(() => {
     if (!profile) return
+    const cached = getCache(`friends-${profile.id}`)
+    if (cached) {
+      setFriendships(cached.friendships)
+      setPendingRequests(cached.pendingRequests)
+    }
     fetchFriends()
   }, [profile?.id])
 
@@ -44,6 +51,7 @@ export default function FriendsPage() {
     ])
     setFriendships(accepted ?? [])
     setPendingRequests(pending ?? [])
+    setCache(`friends-${profile.id}`, { friendships: accepted ?? [], pendingRequests: pending ?? [] })
   }
 
   async function acceptRequest(req) {
@@ -62,6 +70,7 @@ export default function FriendsPage() {
       actor_id: profile.id,
       actor_name: profile.name,
     })
+    sendPushToUser(req.user_id, 'friend request accepted', `${profile.name} accepted your friend request`).catch(() => {})
     setPendingRequests(prev => prev.filter(r => r.id !== req.id))
     setFriendships(prev => {
       const exists = prev.find(f => f.friend_id === req.user_id)
@@ -126,6 +135,7 @@ export default function FriendsPage() {
       actor_id: profile.id,
       actor_name: profile.name,
     })
+    sendPushToUser(friendId, 'new friend request', `${profile.name} wants to be friends`).catch(() => {})
     setAddedIds(prev => new Set([...prev, friendId]))
   }
 
@@ -152,6 +162,7 @@ export default function FriendsPage() {
       hangout_id: hangout.id,
       hangout_title: hangout.title,
     })
+    sendPushToUser(inviteTarget, `${profile.name} invited you`, `"${hangout.title}" — you're on the list`).catch(() => {})
     setInviteTarget(null)
   }
 
@@ -175,7 +186,7 @@ export default function FriendsPage() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-bold text-gray-900">
-              your crew
+              friends
               {pendingRequests.length > 0 && (
                 <span className="ml-2 text-xs bg-violet-500 text-white rounded-full px-1.5 py-0.5 font-semibold">{pendingRequests.length}</span>
               )}

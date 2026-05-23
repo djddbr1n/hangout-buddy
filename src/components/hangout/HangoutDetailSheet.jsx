@@ -81,7 +81,10 @@ export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onCl
                 <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
                   <Users size={14} className="text-gray-400" />
                   <span className="text-sm text-gray-700 font-medium">
-                    {hangout.max_people} max · {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft > 1 ? 's' : ''} left` : 'full'}
+                    {hangout.min_people && hangout.min_people !== hangout.max_people
+                      ? `${hangout.min_people}–${hangout.max_people} people`
+                      : `${hangout.max_people} people`
+                    } · {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft > 1 ? 's' : ''} left` : 'full'}
                   </span>
                 </div>
               </div>

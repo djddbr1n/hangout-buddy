@@ -13,7 +13,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [dateTime, setDateTime] = useState('')
-  const [maxPeople, setMaxPeople] = useState(2)
+  const [peopleSetting, setPeopleSetting] = useState({ expected: 3, min: 2, max: 4 })
   const [isSurprise, setIsSurprise] = useState(false)
   const [selectedSurprise, setSelectedSurprise] = useState()
 
@@ -23,14 +23,18 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
       setDescription(editHangout.description ?? '')
       setLocation(editHangout.location ?? '')
       setDateTime(editHangout.date_time ? new Date(editHangout.date_time).toISOString().slice(0, 16) : '')
-      setMaxPeople(editHangout.max_people ?? 2)
       setIsSurprise(editHangout.is_surprise ?? false)
+      const max = editHangout.max_people ?? 4
+      const min = editHangout.min_people ?? Math.max(1, max - 1)
+      const expected = Math.round((min + max) / 2)
+      setPeopleSetting({ expected, min, max })
     }
   }, [editHangout])
 
   const reset = () => {
     setTitle(''); setDescription(''); setLocation(''); setDateTime('')
-    setMaxPeople(2); setIsSurprise(false); setSelectedSurprise(undefined)
+    setPeopleSetting({ expected: 3, min: 2, max: 4 })
+    setIsSurprise(false); setSelectedSurprise(undefined)
   }
 
   const handleSubmit = () => {
@@ -40,7 +44,8 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
       description,
       location: isSurprise ? undefined : location,
       date_time: new Date(dateTime).toISOString(),
-      max_people: maxPeople,
+      min_people: peopleSetting.min,
+      max_people: peopleSetting.max,
       is_surprise: isSurprise,
       activity: isSurprise ? selectedSurprise : undefined,
     }
@@ -147,7 +152,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
               </AnimatePresence>
 
               <div className="bg-gray-50 rounded-2xl p-4">
-                <PeoplePicker value={maxPeople} onChange={setMaxPeople} />
+                <PeoplePicker value={peopleSetting} onChange={setPeopleSetting} />
               </div>
 
               <motion.button

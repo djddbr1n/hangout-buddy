@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Plus } from 'lucide-react'
+import { Plus, Bell } from 'lucide-react'
+import Link from 'next/link'
 import { HangoutCard } from '@/components/hangout/HangoutCard'
 import { CreateHangoutSheet } from '@/components/hangout/CreateHangoutSheet'
 import { HangoutDetailSheet } from '@/components/hangout/HangoutDetailSheet'
@@ -11,6 +12,7 @@ import { computeMyBlockStates } from '@/lib/availability-utils'
 import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase-client'
 import { getCache, setCache } from '@/lib/page-cache'
+import { sendPushToUser } from '@/app/actions'
 
 export default function DashboardPage() {
   const { profile } = useAuth()
@@ -18,6 +20,7 @@ export default function DashboardPage() {
   const [availability, setAvailability] = useState({})
   const [friendIds, setFriendIds] = useState([])
   const [invitedHangoutIds, setInvitedHangoutIds] = useState(new Set())
+  const [unreadCount, setUnreadCount] = useState(0)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [detailHangout, setDetailHangout] = useState(null)
   const [editHangout, setEditHangout] = useState(null)
@@ -37,13 +40,14 @@ export default function DashboardPage() {
   async function fetchData() {
     const supabase = createClient()
 
-    const [{ data: friendships }, { data: hangoutsData }, { data: availData }, { data: inviteData }] = await Promise.all([
+    const [{ data: friendships }, { data: hangoutsData }, { data: availData }, { data: inviteData }, { count: unread }] = await Promise.all([
       supabase.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted'),
       supabase.from('hangout_posts')
         .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
         .order('date_time', { ascending: true }),
       supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
       supabase.from('notifications').select('hangout_id').eq('user_id', profile.id).eq('type', 'invite').not('hangout_id', 'is', null),
+      supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', profile.id).eq('read', false),
     ])
 
     const ids = (friendships ?? []).map((f) => f.friend_id)
@@ -61,6 +65,7 @@ export default function DashboardPage() {
       ;(avail[day])[row.block] = row.available
     }
     setAvailability(avail)
+    setUnreadCount(unread ?? 0)
     setCache(`dashboard-${profile.id}`, { hangouts: hangoutList, availability: avail, friendIds: ids, invitedHangoutIds: invitedIds })
   }
 
@@ -94,6 +99,7 @@ export default function DashboardPage() {
           hangout_id: hangoutId,
           hangout_title: hangout.title,
         })
+        sendPushToUser(hangout.creator_id, `${profile.name} is going!`, `"${hangout.title}" has a new RSVP`).catch(() => {})
       }
     } else {
       await supabase.from('rsvps').delete().eq('hangout_id', hangoutId).eq('user_id', profile.id)
@@ -115,6 +121,7 @@ export default function DashboardPage() {
         activity: post.activity,
         location: post.location,
         date_time: post.date_time,
+        min_people: post.min_people ?? 1,
         max_people: post.max_people ?? 2,
         status: 'open',
         is_surprise: post.is_surprise ?? false,
@@ -122,7 +129,17 @@ export default function DashboardPage() {
       })
       .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji)')
       .single()
-    if (data) setHangouts(prev => [{ ...data, rsvps: [] }, ...prev])
+    if (data) {
+      setHangouts(prev => [{ ...data, rsvps: [] }, ...prev])
+      // notify friends about new hangout (fire-and-forget)
+      const supabase2 = createClient()
+      supabase2.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted')
+        .then(({ data: friends }) => {
+          for (const { friend_id } of friends ?? []) {
+            sendPushToUser(friend_id, `${profile.name} posted a hangout`, `"${data.title}" — tap to see it`).catch(() => {})
+          }
+        })
+    }
   }
 
   const handleEdit = async (post) => {
@@ -135,6 +152,7 @@ export default function DashboardPage() {
         description: post.description,
         location: post.location,
         date_time: post.date_time,
+        min_people: post.min_people,
         max_people: post.max_people,
         is_surprise: post.is_surprise,
         activity: post.activity,
@@ -161,32 +179,67 @@ export default function DashboardPage() {
               {hangouts.length > 0 ? `${hangouts.length} open hangout${hangouts.length === 1 ? '' : 's'}` : 'nothing yet'}
             </p>
           </div>
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setSheetOpen(true)}
-            className="w-12 h-12 rounded-2xl bg-violet-500 flex items-center justify-center shadow-lg shadow-violet-200"
-          >
-            <Plus size={22} className="text-white" strokeWidth={2.5} />
-          </motion.button>
+          <div className="flex items-center gap-2">
+            <Link href="/notifications" className="relative w-10 h-10 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm">
+              <Bell size={18} className="text-gray-500" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4.5 h-4.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center min-w-[18px] px-1">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setSheetOpen(true)}
+              className="w-10 h-10 rounded-2xl bg-violet-500 flex items-center justify-center shadow-lg shadow-violet-200"
+            >
+              <Plus size={20} className="text-white" strokeWidth={2.5} />
+            </motion.button>
+          </div>
         </div>
         <div className="max-w-md mx-auto">
           <AvailabilityStrip blockStates={blockStates} />
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 space-y-3 pb-32">
+      <div className="max-w-md mx-auto px-4 pb-32">
         {hangouts.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <p className="font-semibold text-gray-500">nothing yet</p>
-            <p className="text-sm mt-1 text-gray-400">post something and get the crew together</p>
+            <p className="text-sm mt-1 text-gray-400">post a hangout and see who's down</p>
           </div>
-        ) : (
-          hangouts.map((h, i) => (
-            <motion.div key={h.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-              <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={setDetailHangout} />
-            </motion.div>
-          ))
-        )}
+        ) : (() => {
+          const invited = hangouts.filter(h => invitedHangoutIds.has(h.id) && h.creator_id !== profile.id)
+          const others  = hangouts.filter(h => !invitedHangoutIds.has(h.id) || h.creator_id === profile.id)
+          return (
+            <div className="space-y-5">
+              {invited.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-violet-500 uppercase tracking-wide px-1 mb-2.5">invited for you</p>
+                  <div className="space-y-3">
+                    {invited.map((h, i) => (
+                      <motion.div key={h.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                        <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={setDetailHangout} isInvited />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {others.length > 0 && (
+                <div>
+                  {invited.length > 0 && <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2.5">all hangouts</p>}
+                  <div className="space-y-3">
+                    {others.map((h, i) => (
+                      <motion.div key={h.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                        <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={setDetailHangout} />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       <CreateHangoutSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onCreate={handleCreate} />
