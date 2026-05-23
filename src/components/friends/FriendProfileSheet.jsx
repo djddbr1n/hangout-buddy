@@ -34,7 +34,7 @@ function AvailabilityCell({ value }) {
 }
 
 
-export function FriendProfileSheet({ friend, availability, canSeeAvailability, open, onClose, onInvite, onAuthLevelChange }) {
+export function FriendProfileSheet({ friend, availability, canSeeAvailability, myGrantLevel, open, onClose, onInvite, onAuthLevelChange }) {
   if (!friend) return null
 
   // count free blocks this week
@@ -95,14 +95,14 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, o
                     whileTap={{ scale: 0.97 }}
                     onClick={() => onAuthLevelChange('invite_only')}
                     className={`flex-1 rounded-2xl border-2 px-3 py-3 text-left transition-all ${
-                      !canSeeAvailability
+                      myGrantLevel !== 'can_see_availability'
                         ? 'border-violet-300 bg-violet-50'
                         : 'border-gray-100 bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <Shield size={14} className={!canSeeAvailability ? 'text-violet-500' : 'text-gray-400'} />
-                      <span className={`text-sm font-semibold ${!canSeeAvailability ? 'text-violet-700' : 'text-gray-500'}`}>
+                      <Shield size={14} className={myGrantLevel !== 'can_see_availability' ? 'text-violet-500' : 'text-gray-400'} />
+                      <span className={`text-sm font-semibold ${myGrantLevel !== 'can_see_availability' ? 'text-violet-700' : 'text-gray-500'}`}>
                         invite only
                       </span>
                     </div>
@@ -113,14 +113,14 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, o
                     whileTap={{ scale: 0.97 }}
                     onClick={() => onAuthLevelChange('can_see_availability')}
                     className={`flex-1 rounded-2xl border-2 px-3 py-3 text-left transition-all ${
-                      canSeeAvailability
+                      myGrantLevel === 'can_see_availability'
                         ? 'border-violet-300 bg-violet-50'
                         : 'border-gray-100 bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <Eye size={14} className={canSeeAvailability ? 'text-violet-500' : 'text-gray-400'} />
-                      <span className={`text-sm font-semibold ${canSeeAvailability ? 'text-violet-700' : 'text-gray-500'}`}>
+                      <Eye size={14} className={myGrantLevel === 'can_see_availability' ? 'text-violet-500' : 'text-gray-400'} />
+                      <span className={`text-sm font-semibold ${myGrantLevel === 'can_see_availability' ? 'text-violet-700' : 'text-gray-500'}`}>
                         see availability
                       </span>
                     </div>

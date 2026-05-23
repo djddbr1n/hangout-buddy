@@ -41,6 +41,10 @@ export default function FriendsPage() {
     () => getCache(friendsKey(_cachedProfileId))?.pendingRequests ?? []
   )
   const [friendAvailability, setFriendAvailability] = useState({})
+  // What each friend has granted ME — separate from what I've granted them
+  const [reverseAuthLevels, setReverseAuthLevels] = useState(
+    () => getCache(friendsKey(_cachedProfileId))?.reverseAuthLevels ?? {}
+  )
 
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
@@ -60,6 +64,7 @@ export default function FriendsPage() {
     if (cached) {
       setFriendships(cached.friendships)
       setPendingRequests(cached.pendingRequests)
+      if (cached.reverseAuthLevels) setReverseAuthLevels(cached.reverseAuthLevels)
       setFirstLoad(false)
     }
     fetchFriends()
@@ -67,7 +72,7 @@ export default function FriendsPage() {
 
   async function fetchFriends() {
     const supabase = createClient()
-    const [{ data: accepted }, { data: pending }] = await Promise.all([
+    const [{ data: accepted }, { data: pending }, { data: reverseGrants }] = await Promise.all([
       supabase
         .from('friendships')
         .select('id,user_id,friend_id,status,auth_level,friend:profiles!friend_id(id,name,nickname,avatar_emoji)')
@@ -78,11 +83,29 @@ export default function FriendsPage() {
         .select('id,user_id,friend_id,status,requester:profiles!user_id(id,name,nickname,avatar_emoji)')
         .eq('friend_id', profile.id)
         .eq('status', 'pending'),
+      // Fetch what each friend has granted ME (their row where friend_id = me)
+      supabase
+        .from('friendships')
+        .select('user_id,auth_level')
+        .eq('friend_id', profile.id)
+        .eq('status', 'accepted'),
     ])
+
+    // Build map: friend_id → what they've granted me
+    const reverseMap = {}
+    for (const row of reverseGrants ?? []) {
+      reverseMap[row.user_id] = row.auth_level
+    }
+
     setFriendships(accepted ?? [])
     setPendingRequests(pending ?? [])
+    setReverseAuthLevels(reverseMap)
     setFirstLoad(false)
-    setCache(friendsKey(profile.id), { friendships: accepted ?? [], pendingRequests: pending ?? [] })
+    setCache(friendsKey(profile.id), {
+      friendships: accepted ?? [],
+      pendingRequests: pending ?? [],
+      reverseAuthLevels: reverseMap,
+    })
 
     // Background-prefetch availability for every friend so their profile opens instantly
     for (const f of accepted ?? []) {
@@ -403,7 +426,10 @@ export default function FriendsPage() {
       <FriendProfileSheet
         friend={selected?.friend ?? null}
         availability={selected ? (friendAvailability[selected.friend.id] ?? null) : null}
-        canSeeAvailability={selected?.friendship.auth_level === 'can_see_availability'}
+        // canSeeAvailability = what THEY have granted ME (for showing their grid)
+        canSeeAvailability={selected ? reverseAuthLevels[selected.friend.id] === 'can_see_availability' : false}
+        // myGrantLevel = what I have granted THEM (for the toggle UI)
+        myGrantLevel={selected?.friendship.auth_level ?? 'invite_only'}
         open={!!selected}
         onClose={() => setSelected(null)}
         onAuthLevelChange={(level) => selected && handleAuthLevel(selected.friendship.id, level)}

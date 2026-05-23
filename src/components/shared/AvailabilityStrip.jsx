@@ -18,9 +18,7 @@ const STATE_STYLE = {
   unknown:   'bg-gray-50 border border-gray-100',
 }
 
-
-export function AvailabilityStrip({ blockStates }) {
-  // figure out today's day index (0=Mon)
+export function AvailabilityStrip({ blockStates, activeBlock, onBlockClick }) {
   const todayIdx = ((new Date().getDay() + 6) % 7)
 
   return (
@@ -34,39 +32,46 @@ export function AvailabilityStrip({ blockStates }) {
         </div>
       </div>
 
-      {/* grid: rows = blocks, cols = days */}
       <div className="space-y-1">
-        {/* day headers */}
         <div className="grid grid-cols-8 gap-1">
-          <div /> {/* spacer for block label */}
+          <div />
           {DAYS.map((d, i) => (
-            <div
-              key={i}
-              className={`text-center text-[10px] font-bold leading-none pb-0.5 ${
-                i === todayIdx ? 'text-violet-600' : 'text-gray-400'
-              }`}
-            >
+            <div key={i} className={`text-center text-[10px] font-bold leading-none pb-0.5 ${i === todayIdx ? 'text-violet-600' : 'text-gray-400'}`}>
               {d}
               {i === todayIdx && <div className="w-1 h-1 rounded-full bg-violet-500 mx-auto mt-0.5" />}
             </div>
           ))}
         </div>
 
-        {BLOCKS.map(block => (
-          <div key={block} className="grid grid-cols-8 gap-1 items-center">
-            <div className="text-center text-sm leading-none">{BLOCK_LABELS[block]}</div>
-            {Array.from({ length: 7 }, (_, d) => {
-              const state = blockStates[d]?.[block] ?? 'unknown'
-              return (
-                <div
-                  key={d}
-                  title={state}
-                  className={`h-5 rounded-md ${STATE_STYLE[state]} ${d === todayIdx ? 'ring-1 ring-violet-300' : ''}`}
-                />
-              )
-            })}
-          </div>
-        ))}
+        {BLOCKS.map(block => {
+          const isActive = activeBlock === block
+          return (
+            <div key={block} className="grid grid-cols-8 gap-1 items-center">
+              {/* emoji label — tappable if onBlockClick provided */}
+              <button
+                onClick={() => onBlockClick?.(isActive ? null : block)}
+                className={`text-center text-sm leading-none transition-all rounded-md ${
+                  onBlockClick ? 'cursor-pointer active:scale-90' : 'cursor-default'
+                } ${isActive ? 'scale-125' : ''}`}
+                title={isActive ? 'clear filter' : `filter by ${block.replace('_', ' ')}`}
+              >
+                {BLOCK_LABELS[block]}
+                {isActive && <div className="w-1 h-1 rounded-full bg-violet-500 mx-auto mt-0.5" />}
+              </button>
+              {Array.from({ length: 7 }, (_, d) => {
+                const state = blockStates[d]?.[block] ?? 'unknown'
+                return (
+                  <div
+                    key={d}
+                    className={`h-5 rounded-md transition-all ${STATE_STYLE[state]} ${
+                      d === todayIdx ? 'ring-1 ring-violet-300' : ''
+                    } ${isActive ? 'opacity-100 ring-2 ring-violet-300' : ''}`}
+                  />
+                )
+              })}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

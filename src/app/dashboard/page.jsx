@@ -144,6 +144,12 @@ export default function DashboardPage() {
   const [detailHangout, setDetailHangout] = useState(null)
   const [editHangout, setEditHangout] = useState(null)
 
+  // ── Filters ───────────────────────────────────────────────────────────────
+  const [activeTimeBlock, setActiveTimeBlock] = useState(null)
+  const [filterFriendsGoing, setFilterFriendsGoing] = useState(false)
+  const [filterHasSpots, setFilterHasSpots] = useState(false)
+  const [filterToday, setFilterToday] = useState(false)
+
   useEffect(() => {
     if (!profile) return
     const cached = getCache(`dashboard-${profile.id}`)
@@ -286,6 +292,37 @@ export default function DashboardPage() {
     setEditHangout(null)
   }
 
+  // ── Filter logic ─────────────────────────────────────────────────────────
+  const BLOCK_HOURS = {
+    early_morning: [0, 10],
+    brunch:        [10, 14],
+    afternoon:     [14, 17],
+    dinner:        [17, 20],
+    late_night:    [20, 24],
+  }
+
+  function matchesFilters(h) {
+    if (activeTimeBlock) {
+      const hr = new Date(h.date_time).getHours()
+      const [min, max] = BLOCK_HOURS[activeTimeBlock]
+      if (hr < min || hr >= max) return false
+    }
+    if (filterToday) {
+      const today = new Date().toDateString()
+      if (new Date(h.date_time).toDateString() !== today) return false
+    }
+    if (filterFriendsGoing) {
+      if (!h.rsvps?.some(r => friendIds.includes(r.user_id))) return false
+    }
+    if (filterHasSpots) {
+      const going = h.rsvps?.filter(r => r.status === 'going').length ?? 0
+      if (h.max_people - 1 - going <= 0) return false
+    }
+    return true
+  }
+
+  const hasActiveFilter = activeTimeBlock || filterFriendsGoing || filterHasSpots || filterToday
+
   if (!profile) return null
 
   return (
@@ -317,20 +354,61 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="max-w-md mx-auto">
-          <AvailabilityStrip blockStates={blockStates} />
+          <AvailabilityStrip
+            blockStates={blockStates}
+            activeBlock={activeTimeBlock}
+            onBlockClick={setActiveTimeBlock}
+          />
+        </div>
+      </div>
+
+      {/* ── Filter chips bar ─────────────────────────────────────────────── */}
+      <div className="max-w-md mx-auto px-4 mb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {/* Social / status filters */}
+          {[
+            { key: 'today',        label: '📅 today',          active: filterToday,        toggle: () => setFilterToday(v => !v) },
+            { key: 'friends',      label: '👥 friends going',   active: filterFriendsGoing, toggle: () => setFilterFriendsGoing(v => !v) },
+            { key: 'spots',        label: '🟢 has spots',       active: filterHasSpots,     toggle: () => setFilterHasSpots(v => !v) },
+          ].map(f => (
+            <motion.button
+              key={f.key}
+              whileTap={{ scale: 0.94 }}
+              onClick={f.toggle}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                f.active
+                  ? 'bg-violet-500 text-white shadow-sm shadow-violet-200'
+                  : 'bg-white text-gray-500 border border-gray-200'
+              }`}
+            >
+              {f.label}
+            </motion.button>
+          ))}
+
+          {/* Clear all */}
+          {hasActiveFilter && (
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterHasSpots(false); setFilterToday(false) }}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold text-gray-400 border border-dashed border-gray-300 whitespace-nowrap"
+            >
+              clear
+            </motion.button>
+          )}
         </div>
       </div>
 
       <div className="max-w-md mx-auto px-4 pb-32">
         {(() => {
-          // events i'm hosting or going to → folded section
           const myEvents = hangouts.filter(h =>
             h.creator_id === profile.id ||
             h.rsvps?.some(r => r.user_id === profile.id && r.status === 'going')
           )
           const myEventIds = new Set(myEvents.map(h => h.id))
-          // everything else → main feed
-          const feedHangouts = hangouts.filter(h => !myEventIds.has(h.id))
+          // Apply filters only to the feed (my events always visible)
+          const feedHangouts = hangouts
+            .filter(h => !myEventIds.has(h.id))
+            .filter(matchesFilters)
 
           return (
             <div className="space-y-5">
@@ -348,31 +426,52 @@ export default function DashboardPage() {
                   <p className="font-semibold text-gray-500">nothing yet</p>
                   <p className="text-sm mt-1 text-gray-400">post a hangout and see who's down</p>
                 </div>
-              ) : feedHangouts.length > 0 ? (
+              ) : (
                 <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide px-1 mb-3">
-                    all hangouts
-                  </p>
-                  <div className="space-y-3">
-                    {feedHangouts.map((h, i) => (
-                      <motion.div
-                        key={h.id}
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                      >
-                        <HangoutCard
-                          hangout={h}
-                          currentUser={profile}
-                          friendIds={friendIds}
-                          onOpen={setDetailHangout}
-                          isInvited={invitedHangoutIds.has(h.id)}
-                        />
-                      </motion.div>
-                    ))}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+                      all hangouts
+                    </p>
+                    {hasActiveFilter && (
+                      <span className="text-xs text-violet-500 font-semibold">
+                        {feedHangouts.length} match{feedHangouts.length !== 1 ? 'es' : ''}
+                      </span>
+                    )}
                   </div>
+
+                  {feedHangouts.length === 0 ? (
+                    <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+                      <p className="text-2xl mb-2">🔍</p>
+                      <p className="font-semibold text-gray-500 text-sm">no hangouts match</p>
+                      <button
+                        onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterHasSpots(false); setFilterToday(false) }}
+                        className="text-xs text-violet-500 font-medium mt-2"
+                      >
+                        clear filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {feedHangouts.map((h, i) => (
+                        <motion.div
+                          key={h.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                        >
+                          <HangoutCard
+                            hangout={h}
+                            currentUser={profile}
+                            friendIds={friendIds}
+                            onOpen={setDetailHangout}
+                            isInvited={invitedHangoutIds.has(h.id)}
+                          />
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ) : null}
+              )}
             </div>
           )
         })()}
