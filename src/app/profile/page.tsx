@@ -1,10 +1,25 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { motion } from 'framer-motion'
 import { Calendar, LogOut, ChevronRight } from 'lucide-react'
-import { mockCurrentUser } from '@/lib/mock-data'
+import { useAuth } from '@/hooks/useAuth'
+import { useRouter } from 'next/navigation'
 
 export default function ProfilePage() {
+  const { profile, loading, signOut } = useAuth()
+  const router = useRouter()
+
+  async function handleSignOut() {
+    await signOut()
+    router.push('/auth/login')
+  }
+
+  if (loading) {
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400 text-sm">loading...</p></div>
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white px-5 pt-12 pb-6 border-b border-gray-100">
@@ -14,10 +29,10 @@ export default function ProfilePage() {
             animate={{ scale: 1, opacity: 1 }}
             className="w-20 h-20 rounded-full bg-violet-50 border-4 border-violet-200 flex items-center justify-center text-4xl mx-auto mb-3"
           >
-            {mockCurrentUser.avatar_emoji}
+            {profile?.avatar_emoji ?? '🦊'}
           </motion.div>
-          <h1 className="text-xl font-bold text-gray-900">{mockCurrentUser.name}</h1>
-          <p className="text-gray-400 text-sm">@{mockCurrentUser.nickname}</p>
+          <h1 className="text-xl font-bold text-gray-900">{profile?.name ?? '—'}</h1>
+          <p className="text-gray-400 text-sm">@{profile?.nickname ?? '—'}</p>
         </div>
       </div>
 
@@ -64,6 +79,7 @@ export default function ProfilePage() {
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <motion.button
             whileTap={{ scale: 0.98 }}
+            onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors text-red-400"
           >
             <LogOut size={18} />
