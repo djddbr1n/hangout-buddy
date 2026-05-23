@@ -10,42 +10,58 @@ import { AvailabilityStrip } from '@/components/shared/AvailabilityStrip'
 import { computeMyBlockStates } from '@/lib/availability-utils'
 import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase-client'
+import { getCache, setCache } from '@/lib/page-cache'
 
 export default function DashboardPage() {
   const { profile } = useAuth()
   const [hangouts, setHangouts] = useState([])
   const [availability, setAvailability] = useState({})
   const [friendIds, setFriendIds] = useState([])
+  const [invitedHangoutIds, setInvitedHangoutIds] = useState(new Set())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [detailHangout, setDetailHangout] = useState(null)
+  const [editHangout, setEditHangout] = useState(null)
 
   useEffect(() => {
     if (!profile) return
+    const cached = getCache(`dashboard-${profile.id}`)
+    if (cached) {
+      setHangouts(cached.hangouts)
+      setAvailability(cached.availability)
+      setFriendIds(cached.friendIds)
+      setInvitedHangoutIds(cached.invitedHangoutIds)
+    }
     fetchData()
   }, [profile?.id])
 
   async function fetchData() {
     const supabase = createClient()
 
-    const [{ data: friendships }, { data: hangoutsData }, { data: availData }] = await Promise.all([
+    const [{ data: friendships }, { data: hangoutsData }, { data: availData }, { data: inviteData }] = await Promise.all([
       supabase.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted'),
       supabase.from('hangout_posts')
         .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
         .order('date_time', { ascending: true }),
       supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
+      supabase.from('notifications').select('hangout_id').eq('user_id', profile.id).eq('type', 'invite').not('hangout_id', 'is', null),
     ])
 
-    setFriendIds((friendships ?? []).map((f) => f.friend_id))
-    setHangouts((hangoutsData ?? []))
+    const ids = (friendships ?? []).map((f) => f.friend_id)
+    const hangoutList = hangoutsData ?? []
+    const invitedIds = new Set((inviteData ?? []).map(n => n.hangout_id))
+
+    setFriendIds(ids)
+    setHangouts(hangoutList)
+    setInvitedHangoutIds(invitedIds)
 
     const avail = {}
     for (const row of availData ?? []) {
       const day = row.day_index
       if (!avail[day]) avail[day] = {}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(avail[day])[row.block] = row.available
     }
     setAvailability(avail)
+    setCache(`dashboard-${profile.id}`, { hangouts: hangoutList, availability: avail, friendIds: ids, invitedHangoutIds: invitedIds })
   }
 
   const blockStates = useMemo(
@@ -109,6 +125,30 @@ export default function DashboardPage() {
     if (data) setHangouts(prev => [{ ...data, rsvps: [] }, ...prev])
   }
 
+  const handleEdit = async (post) => {
+    if (!editHangout) return
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('hangout_posts')
+      .update({
+        title: post.title,
+        description: post.description,
+        location: post.location,
+        date_time: post.date_time,
+        max_people: post.max_people,
+        is_surprise: post.is_surprise,
+        activity: post.activity,
+      })
+      .eq('id', editHangout.id)
+      .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji)')
+      .single()
+    if (data) {
+      const updated = { ...data, rsvps: editHangout.rsvps }
+      setHangouts(prev => prev.map(h => h.id === editHangout.id ? updated : h))
+    }
+    setEditHangout(null)
+  }
+
   if (!profile) return null
 
   return (
@@ -118,7 +158,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">what's up</h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              {hangouts.length > 0 ? `${hangouts.length} hangout${hangouts.length === 1 ? '' : 's'} from your crew` : 'nothing from your crew yet'}
+              {hangouts.length > 0 ? `${hangouts.length} open hangout${hangouts.length === 1 ? '' : 's'}` : 'nothing yet'}
             </p>
           </div>
           <motion.button
@@ -150,6 +190,7 @@ export default function DashboardPage() {
       </div>
 
       <CreateHangoutSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onCreate={handleCreate} />
+      <CreateHangoutSheet open={!!editHangout} onClose={() => setEditHangout(null)} editHangout={editHangout} onEdit={handleEdit} />
       <HangoutDetailSheet
         hangout={detailHangout}
         open={!!detailHangout}
@@ -157,6 +198,7 @@ export default function DashboardPage() {
         friendIds={friendIds}
         onClose={() => setDetailHangout(null)}
         onRSVP={handleRSVP}
+        onEdit={h => { setDetailHangout(null); setEditHangout(h) }}
       />
     </div>
   )

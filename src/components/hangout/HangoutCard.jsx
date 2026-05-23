@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { MapPin, Clock, Users, Sparkles, ChevronRight } from 'lucide-react'
+import { MapPin, Users, Sparkles, ChevronRight } from 'lucide-react'
 import { format } from 'date-fns'
 
 const ACTIVITY_COLORS = {
@@ -9,15 +9,16 @@ const ACTIVITY_COLORS = {
   'default':        'from-violet-50 to-pink-50',
 }
 
-
-export function HangoutCard({ hangout, currentUser, friendIds, onOpen }) {
+export function HangoutCard({ hangout, currentUser, friendIds, onOpen, isInvited }) {
   const goingCount = hangout.rsvps?.filter(r => r.status === 'going').length ?? 0
   const maybeCount = hangout.rsvps?.filter(r => r.status === 'maybe').length ?? 0
   const myRSVP = hangout.rsvps?.find(r => r.user_id === currentUser.id)
-  const spotsLeft = hangout.max_people - goingCount
+  const spotsLeft = hangout.max_people - 1 - goingCount
   const isMine = hangout.creator_id === currentUser.id
   const isFull = spotsLeft <= 0 && !myRSVP
-  const gradientClass = ACTIVITY_COLORS[hangout.activity ?? ''] ?? ACTIVITY_COLORS['default']
+  const gradientClass = isInvited
+    ? 'from-violet-100 to-pink-100'
+    : (ACTIVITY_COLORS[hangout.activity ?? ''] ?? ACTIVITY_COLORS['default'])
   const friendAttendees = hangout.rsvps?.filter(r => friendIds.includes(r.user_id) && r.user_id !== currentUser.id) ?? []
 
   return (
@@ -27,30 +28,49 @@ export function HangoutCard({ hangout, currentUser, friendIds, onOpen }) {
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => onOpen(hangout)}
-      className="w-full bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden text-left"
+      className={`w-full bg-white rounded-3xl shadow-sm border overflow-hidden text-left ${
+        isInvited ? 'border-violet-200 shadow-md shadow-violet-100/60' : 'border-gray-100'
+      }`}
     >
-      {/* color header */}
-      <div className={`bg-gradient-to-r ${gradientClass} px-5 pt-3 pb-3`}>
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex gap-1">
+      {/* gradient header */}
+      <div className={`bg-gradient-to-r ${gradientClass} px-5 pt-3.5 pb-3`}>
+
+        {/* time — first thing you see */}
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-sm font-bold text-gray-800 tracking-tight">
+            {format(new Date(hangout.date_time), 'EEE, MMM d · h:mm a')}
+          </p>
+          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+            isFull ? 'bg-red-100 text-red-500' : spotsLeft === 1 ? 'bg-orange-100 text-orange-500' : 'bg-white/70 text-gray-500'
+          }`}>
+            {isFull ? 'full' : `${spotsLeft} open`}
+          </span>
+        </div>
+
+        {/* status badges */}
+        {(isInvited || hangout.is_surprise || myRSVP) && (
+          <div className="flex gap-1 mb-2">
+            {isInvited && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/80 text-violet-600 font-semibold">
+                ✉ invited
+              </span>
+            )}
             {hangout.is_surprise && (
               <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-white/70 text-violet-600 font-semibold">
                 <Sparkles size={10} /> surprise
               </span>
             )}
             {myRSVP && (
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${myRSVP.status === 'going' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                myRSVP.status === 'going' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+              }`}>
                 {myRSVP.status === 'going' ? '✓ going' : '? maybe'}
               </span>
             )}
           </div>
-          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-            isFull ? 'bg-red-100 text-red-500' : spotsLeft === 1 ? 'bg-orange-100 text-orange-500' : 'bg-white/70 text-gray-500'
-          }`}>
-            {isFull ? 'full' : `${spotsLeft} left`}
-          </span>
-        </div>
+        )}
 
+        {/* title + creator */}
         <div className="flex items-center gap-2.5">
           <span className="text-2xl shrink-0">{hangout.creator?.avatar_emoji ?? '👤'}</span>
           <div className="min-w-0 flex-1">
@@ -62,23 +82,16 @@ export function HangoutCard({ hangout, currentUser, friendIds, onOpen }) {
       </div>
 
       {/* body */}
-      <div className="px-5 py-3 space-y-2.5">
-        {/* time + location */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
-          <span className="flex items-center gap-1.5">
-            <Clock size={12} className="text-gray-300" />
-            {format(new Date(hangout.date_time), 'EEE, MMM d · h:mm a')}
-          </span>
-          {(hangout.location || hangout.is_surprise) && (
-            <span className="flex items-center gap-1">
-              {hangout.is_surprise
-                ? <><Sparkles size={11} className="text-violet-400" /><span className="text-violet-400">TBD</span></>
-                : <><MapPin size={11} />{hangout.location}</>}
-            </span>
-          )}
-        </div>
+      <div className="px-5 py-3 space-y-2">
+        {(hangout.location || hangout.is_surprise) && (
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            {hangout.is_surprise
+              ? <><Sparkles size={11} className="text-violet-400" /><span className="text-violet-400">location TBD</span></>
+              : <><MapPin size={11} />{hangout.location}</>
+            }
+          </div>
+        )}
 
-        {/* attendees */}
         <div className="flex items-center gap-2">
           {hangout.rsvps && hangout.rsvps.length > 0 ? (
             <>

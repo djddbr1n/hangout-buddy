@@ -7,14 +7,14 @@ import { createClient } from '@/lib/supabase-client'
 import { useAuth } from '@/hooks/useAuth'
 
 const TIME_BLOCKS = [
-  { key: 'early_morning', emoji: '🌅' },
-  { key: 'brunch', emoji: '☕' },
-  { key: 'afternoon', emoji: '🌤' },
-  { key: 'dinner', emoji: '🌆' },
-  { key: 'late_night', emoji: '🌙' },
+  { key: 'early_morning', emoji: '🌅', label: 'Early', time: 'before 10am' },
+  { key: 'brunch',        emoji: '☕',  label: 'Brunch', time: '10am – 2pm' },
+  { key: 'afternoon',     emoji: '🌤', label: 'Afternoon', time: '2pm – 5pm' },
+  { key: 'dinner',        emoji: '🌆', label: 'Dinner', time: '5pm – 8pm' },
+  { key: 'late_night',    emoji: '🌙', label: 'Late', time: 'after 8pm' },
 ]
 
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 
 export default function OnboardingPage() {
@@ -98,15 +98,21 @@ export default function OnboardingPage() {
           <AnimatePresence mode="wait">
             {step === 'availability' ? (
               <motion.div key="availability" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                <div className="grid grid-cols-8 gap-1 mb-2">
+                <div className="grid gap-1 mb-2" style={{ gridTemplateColumns: '68px repeat(7, 1fr)' }}>
                   <div />
                   {DAYS.map((d, i) => (
-                    <div key={i} className="text-center text-xs font-semibold text-gray-400">{d}</div>
+                    <div key={i} className="text-center text-[10px] font-semibold text-gray-400">{d}</div>
                   ))}
                 </div>
-                {TIME_BLOCKS.map(({ key: block, emoji }) => (
-                  <div key={block} className="grid grid-cols-8 gap-1 mb-1">
-                    <div className="flex items-center justify-center text-sm">{emoji}</div>
+                {TIME_BLOCKS.map(({ key: block, emoji, label, time }) => (
+                  <div key={block} className="grid gap-1 mb-1 items-center" style={{ gridTemplateColumns: '68px repeat(7, 1fr)' }}>
+                    <div className="flex items-center gap-1.5 pr-1">
+                      <span className="text-sm leading-none">{emoji}</span>
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-600 leading-none">{label}</p>
+                        <p className="text-[9px] text-gray-400 leading-none mt-0.5">{time}</p>
+                      </div>
+                    </div>
                     {Array.from({ length: 7 }, (_, dayIndex) => {
                       const isFree = availability[`${dayIndex}-${block}`]
                       return (
@@ -114,7 +120,7 @@ export default function OnboardingPage() {
                           key={dayIndex}
                           whileTap={{ scale: 0.85 }}
                           onClick={() => toggleCell(dayIndex, block)}
-                          className={`h-9 rounded-lg transition-colors ${isFree ? 'bg-emerald-400' : 'bg-gray-100'}`}
+                          className={`h-8 rounded-lg transition-colors ${isFree ? 'bg-emerald-400' : 'bg-gray-100'}`}
                         />
                       )
                     })}

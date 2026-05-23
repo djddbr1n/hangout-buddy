@@ -1,20 +1,20 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle } from 'lucide-react'
+import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle, Pencil } from 'lucide-react'
 import { format } from 'date-fns'
 import { RSVPButtons } from './RSVPButtons'
 import { SurpriseSpinner } from './SurpriseSpinner'
 
 
-export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onClose, onRSVP }) {
+export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onClose, onRSVP, onEdit }) {
   if (!hangout) return null
 
   const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going') ?? []
   const maybeRSVPs = hangout.rsvps?.filter(r => r.status === 'maybe') ?? []
   const myRSVP = hangout.rsvps?.find(r => r.user_id === currentUser.id)
   const isMine = hangout.creator_id === currentUser.id
-  const spotsLeft = hangout.max_people - goingRSVPs.length
+  const spotsLeft = hangout.max_people - 1 - goingRSVPs.length
   const isFull = spotsLeft <= 0 && !myRSVP
 
   return (
@@ -45,9 +45,16 @@ export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onCl
                     <p className="text-sm text-gray-400">{isMine ? 'you posted this' : `posted by @${hangout.creator?.nickname}`}</p>
                   </div>
                 </div>
-                <button onClick={onClose} className="p-2 rounded-full hover:bg-white/60 mt-0.5">
-                  <X size={18} className="text-gray-400" />
-                </button>
+                <div className="flex items-center gap-1">
+                  {isMine && onEdit && (
+                    <button onClick={() => { onClose(); onEdit(hangout) }} className="p-2 rounded-full hover:bg-white/60">
+                      <Pencil size={15} className="text-gray-400" />
+                    </button>
+                  )}
+                  <button onClick={onClose} className="p-2 rounded-full hover:bg-white/60 mt-0.5">
+                    <X size={18} className="text-gray-400" />
+                  </button>
+                </div>
               </div>
             </div>
 
