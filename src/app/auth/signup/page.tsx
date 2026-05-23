@@ -13,7 +13,7 @@ const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','
 export default function SignupPage() {
   const router = useRouter()
 
-  const [step, setStep] = useState<'profile' | 'account'>('profile')
+  const [step, setStep] = useState<'profile' | 'account' | 'confirm'>('profile')
   const [name, setName] = useState('')
   const [nickname, setNickname] = useState('')
   const [avatar, setAvatar] = useState('🦊')
@@ -41,6 +41,13 @@ export default function SignupPage() {
       if (profileError) { setError(profileError.message); setLoading(false); return }
     }
 
+    // if email confirmation is required, session will be null — show confirm screen
+    if (!authData.session) {
+      setStep('confirm')
+      setLoading(false)
+      return
+    }
+
     router.push('/dashboard')
   }
 
@@ -60,7 +67,20 @@ export default function SignupPage() {
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 space-y-4">
           <AnimatePresence mode="wait">
-            {step === 'profile' ? (
+            {step === 'confirm' ? (
+              <motion.div key="confirm" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4 text-center py-2">
+                <div className="text-5xl mb-2">📬</div>
+                <div>
+                  <p className="font-semibold text-gray-800">check your email</p>
+                  <p className="text-sm text-gray-400 mt-1">we sent a confirmation link to</p>
+                  <p className="text-sm font-medium text-violet-500 mt-0.5">{email}</p>
+                </div>
+                <p className="text-xs text-gray-400">click the link to activate your account, then come back to sign in</p>
+                <Link href="/auth/login" className="block w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold text-sm text-center">
+                  go to sign in
+                </Link>
+              </motion.div>
+            ) : step === 'profile' ? (
               <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <p className="text-sm font-semibold text-gray-500">step 1 of 2 — your vibe</p>
 
