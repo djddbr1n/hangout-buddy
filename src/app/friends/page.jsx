@@ -29,12 +29,12 @@ export default function FriendsPage() {
     const [{ data: accepted }, { data: pending }] = await Promise.all([
       supabase
         .from('friendships')
-        .select('*, friend:profilesfriend_id(id,name,nickname,avatar_emoji)')
+        .select('*, friend:profiles!friend_id(id,name,nickname,avatar_emoji)')
         .eq('user_id', profile.id)
         .eq('status', 'accepted'),
       supabase
         .from('friendships')
-        .select('*, requester:profilesuser_id(id,name,nickname,avatar_emoji)')
+        .select('*, requester:profiles!user_id(id,name,nickname,avatar_emoji)')
         .eq('friend_id', profile.id)
         .eq('status', 'pending'),
     ])

@@ -30,7 +30,7 @@ export default function DashboardPage() {
     const [{ data: friendships }, { data: hangoutsData }, { data: availData }] = await Promise.all([
       supabase.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted'),
       supabase.from('hangout_posts')
-        .select('*, creator:profilescreator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profilesuser_id(id,name,nickname,avatar_emoji))')
+        .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
         .order('date_time', { ascending: true }),
       supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
     ])
@@ -93,7 +93,7 @@ export default function DashboardPage() {
         is_surprise: post.is_surprise ?? false,
         surprise_options: post.surprise_options,
       })
-      .select('*, creator:profilescreator_id(id,name,nickname,avatar_emoji)')
+      .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji)')
       .single()
     if (data) setHangouts(prev => [{ ...data, rsvps: [] }, ...prev])
   }
