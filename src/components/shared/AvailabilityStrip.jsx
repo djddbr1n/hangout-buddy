@@ -1,11 +1,8 @@
 'use client'
 
-import { DayIndex, TimeBlock } from '@/types'
-import { BlockState } from '@/lib/availability-utils'
-
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-const BLOCKS: TimeBlock[] = ['early_morning', 'brunch', 'afternoon', 'dinner', 'late_night']
-const BLOCK_LABELS: Record<TimeBlock, string> = {
+const BLOCKS = ['early_morning', 'brunch', 'afternoon', 'dinner', 'late_night']
+const BLOCK_LABELS = {
   early_morning: '🌅',
   brunch:        '☕',
   afternoon:     '🌤',
@@ -13,7 +10,7 @@ const BLOCK_LABELS: Record<TimeBlock, string> = {
   late_night:    '🌙',
 }
 
-const STATE_STYLE: Record<BlockState, string> = {
+const STATE_STYLE = {
   committed: 'bg-violet-400',
   pending:   'bg-amber-300',
   free:      'bg-emerald-200',
@@ -21,13 +18,10 @@ const STATE_STYLE: Record<BlockState, string> = {
   unknown:   'bg-gray-50 border border-gray-100',
 }
 
-interface AvailabilityStripProps {
-  blockStates: Record<DayIndex, Partial<Record<TimeBlock, BlockState>>>
-}
 
-export function AvailabilityStrip({ blockStates }: AvailabilityStripProps) {
+export function AvailabilityStrip({ blockStates }) {
   // figure out today's day index (0=Mon)
-  const todayIdx = ((new Date().getDay() + 6) % 7) as DayIndex
+  const todayIdx = ((new Date().getDay() + 6) % 7)
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 space-y-2">
@@ -62,7 +56,7 @@ export function AvailabilityStrip({ blockStates }: AvailabilityStripProps) {
           <div key={block} className="grid grid-cols-8 gap-1 items-center">
             <div className="text-center text-sm leading-none">{BLOCK_LABELS[block]}</div>
             {Array.from({ length: 7 }, (_, d) => {
-              const state = blockStates[d as DayIndex]?.[block] ?? 'unknown'
+              const state = blockStates[d]?.[block] ?? 'unknown'
               return (
                 <div
                   key={d}

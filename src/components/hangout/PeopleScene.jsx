@@ -6,14 +6,13 @@ const SHIRTS = ['bg-pink-300', 'bg-violet-300', 'bg-sky-300', 'bg-emerald-300', 
 const HAIRS = ['bg-amber-900', 'bg-stone-800', 'bg-yellow-600', 'bg-orange-800', 'bg-gray-900']
 const SKIN = '#FFD7A8'
 
-type Size = 'sm' | 'md' | 'lg'
 const D = {
   sm: { w: 26, hair: 11, eye: 3.5, smile: 8, bw: 22, bh: 24 },
   md: { w: 34, hair: 15, eye: 4.5, smile: 10, bw: 30, bh: 32 },
   lg: { w: 40, hair: 18, eye: 5, smile: 12, bw: 36, bh: 38 },
 }
 
-function Person({ index, size = 'md' }: { index: number; size?: Size }) {
+function Person({ index, size = 'md' }) {
   const d = D[size]
   return (
     <div className="flex flex-col items-center" style={{ gap: 0 }}>
@@ -30,7 +29,7 @@ function Person({ index, size = 'md' }: { index: number; size?: Size }) {
   )
 }
 
-function Row({ indices, size = 'md', gap = 12 }: { indices: number[]; size?: Size; gap?: number }) {
+function Row({ indices, size = 'md', gap = 12 }) {
   return (
     <div className="flex items-end" style={{ gap }}>
       {indices.map(i => <Person key={i} index={i} size={size} />)}
@@ -104,7 +103,7 @@ function Picnic() {
 
 /* ── 4: card game ── */
 function CardGame() {
-  const cards = [['A', '♥', 'text-red-500'], ['K', '♠', 'text-gray-800'], ['Q', '♣', 'text-gray-800'], ['J', '♦', 'text-red-400']] as const
+  const cards = [['A', '♥', 'text-red-500'], ['K', '♠', 'text-gray-800'], ['Q', '♣', 'text-gray-800'], ['J', '♦', 'text-red-400']]
   return (
     <div className="flex flex-col items-center gap-2">
       <Row indices={[0, 1]} size="sm" gap={48} />
@@ -149,7 +148,7 @@ function MovieNight() {
 }
 
 /* ── 6+: backyard bbq ── */
-function BBQ({ count }: { count: number }) {
+function BBQ({ count }) {
   const top = Math.ceil(count / 2), bottom = Math.floor(count / 2)
   return (
     <div className="flex flex-col items-center gap-2">
@@ -171,7 +170,7 @@ function BBQ({ count }: { count: number }) {
   )
 }
 
-function getScene(count: number) {
+function getScene(count) {
   if (count === 1) return <Solo />
   if (count === 2) return <CoffeeDate />
   if (count === 3) return <Picnic />
@@ -180,7 +179,7 @@ function getScene(count: number) {
   return <BBQ count={count} />
 }
 
-export function PeopleScene({ count }: { count: number }) {
+export function PeopleScene({ count }) {
   return (
     <div className="w-full flex items-center justify-center min-h-[130px] py-1">
       <motion.div

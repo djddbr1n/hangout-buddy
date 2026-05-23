@@ -2,17 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { Check, HelpCircle, X } from 'lucide-react'
-import { RSVPStatus } from '@/types'
-
-interface RSVPButtonsProps {
-  hangoutId: string
-  current: RSVPStatus | null
-  disabled?: boolean
-  onRSVP?: (hangoutId: string, status: RSVPStatus | null) => void
-}
-
-export function RSVPButtons({ hangoutId, current, disabled, onRSVP }: RSVPButtonsProps) {
-  const handle = (status: RSVPStatus) => {
+export function RSVPButtons({ hangoutId, current, disabled, onRSVP }) {
+  const handle = (status) => {
     if (disabled && !current) return
     onRSVP?.(hangoutId, current === status ? null : status)
   }

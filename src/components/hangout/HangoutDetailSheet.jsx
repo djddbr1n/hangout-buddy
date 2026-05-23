@@ -2,23 +2,12 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle } from 'lucide-react'
-import { HangoutPost, User } from '@/types'
 import { format } from 'date-fns'
 import { RSVPButtons } from './RSVPButtons'
 import { SurpriseSpinner } from './SurpriseSpinner'
 
-interface HangoutDetailSheetProps {
-  hangout: HangoutPost | null
-  open: boolean
-  currentUser: User
-  friendIds: string[]
-  onClose: () => void
-  onRSVP?: (hangoutId: string, status: 'going' | 'maybe' | null) => void
-}
 
-export function HangoutDetailSheet({
-  hangout, open, currentUser, friendIds, onClose, onRSVP,
-}: HangoutDetailSheetProps) {
+export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onClose, onRSVP }) {
   if (!hangout) return null
 
   const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going') ?? []
@@ -167,7 +156,7 @@ export function HangoutDetailSheet({
                 {goingRSVPs.length === 0 && maybeRSVPs.length === 0 && (
                   <div className="text-center py-4 text-gray-400">
                     <p className="text-2xl mb-1">👀</p>
-                    <p className="text-sm">no one's joined yet — be the first!</p>
+                    <p className="text-sm">no one's joined yet — be the first</p>
                   </div>
                 )}
               </div>

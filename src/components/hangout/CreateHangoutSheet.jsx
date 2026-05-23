@@ -5,22 +5,14 @@ import { X, MapPin, Calendar, Sparkles, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { PeoplePicker } from './PeoplePicker'
 import { SurpriseSpinner } from './SurpriseSpinner'
-import { HangoutPost } from '@/types'
-
-interface CreateHangoutSheetProps {
-  open: boolean
-  onClose: () => void
-  onCreate: (post: Partial<HangoutPost>) => void
-}
-
-export function CreateHangoutSheet({ open, onClose, onCreate }: CreateHangoutSheetProps) {
+export function CreateHangoutSheet({ open, onClose, onCreate }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [dateTime, setDateTime] = useState('')
   const [maxPeople, setMaxPeople] = useState(2)
   const [isSurprise, setIsSurprise] = useState(false)
-  const [selectedSurprise, setSelectedSurprise] = useState<string | undefined>()
+  const [selectedSurprise, setSelectedSurprise] = useState()
 
   const handleSubmit = () => {
     if (!title || !dateTime) return

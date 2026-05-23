@@ -13,7 +13,7 @@ const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','
 export default function SignupPage() {
   const router = useRouter()
 
-  const [step, setStep] = useState<'profile' | 'account' | 'confirm'>('profile')
+  const [step, setStep] = useState('profile')
   const [name, setName] = useState('')
   const [nickname, setNickname] = useState('')
   const [avatar, setAvatar] = useState('🦊')
@@ -48,7 +48,7 @@ export default function SignupPage() {
       return
     }
 
-    router.push('/dashboard')
+    router.push('/onboarding')
   }
 
   return (

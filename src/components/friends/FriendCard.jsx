@@ -1,18 +1,13 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Friendship } from '@/types'
 import { Shield, Eye, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
-interface FriendCardProps {
-  friendship: Friendship
-  onChangeAuthLevel?: (friendshipId: string, level: 'invite_only' | 'can_see_availability') => void
-}
 
-export function FriendCard({ friendship, onChangeAuthLevel }: FriendCardProps) {
+export function FriendCard({ friendship, onChangeAuthLevel }) {
   const [expanded, setExpanded] = useState(false)
-  const friend = friendship.friend!
+  const friend = friendship.friend
 
   return (
     <motion.div
@@ -51,7 +46,7 @@ export function FriendCard({ friendship, onChangeAuthLevel }: FriendCardProps) {
         >
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-3 mb-2">access level</p>
           <div className="grid grid-cols-2 gap-2">
-            {(['invite_only', 'can_see_availability'] as const).map(level => (
+            {(['invite_only', 'can_see_availability']).map(level => (
               <button
                 key={level}
                 onClick={() => onChangeAuthLevel?.(friendship.id, level)}

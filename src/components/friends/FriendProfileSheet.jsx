@@ -2,9 +2,8 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Lock, Plus } from 'lucide-react'
-import { User, WeekAvailability, TimeBlock, DayIndex } from '@/types'
 
-const DAYS: { label: string; short: string }[] = [
+const DAYS = [
   { label: 'Monday', short: 'Mon' },
   { label: 'Tuesday', short: 'Tue' },
   { label: 'Wednesday', short: 'Wed' },
@@ -14,7 +13,7 @@ const DAYS: { label: string; short: string }[] = [
   { label: 'Sunday', short: 'Sun' },
 ]
 
-const BLOCKS: { key: TimeBlock; label: string; time: string; emoji: string }[] = [
+const BLOCKS = [
   { key: 'early_morning', label: 'Early',     time: 'before 10am', emoji: '🌅' },
   { key: 'brunch',        label: 'Brunch',    time: '10am – 2pm',  emoji: '☕' },
   { key: 'afternoon',     label: 'Afternoon', time: '2pm – 5pm',   emoji: '🌤' },
@@ -22,7 +21,7 @@ const BLOCKS: { key: TimeBlock; label: string; time: string; emoji: string }[] =
   { key: 'late_night',    label: 'Late',      time: 'after 8pm',   emoji: '🌙' },
 ]
 
-function AvailabilityCell({ value }: { value: boolean | undefined }) {
+function AvailabilityCell({ value }) {
   if (value === true)
     return (
       <div className="w-full h-full rounded-lg bg-emerald-100 flex items-center justify-center">
@@ -34,16 +33,8 @@ function AvailabilityCell({ value }: { value: boolean | undefined }) {
   return <div className="w-full h-full rounded-lg border border-dashed border-gray-200" />
 }
 
-interface FriendProfileSheetProps {
-  friend: User | null
-  availability: WeekAvailability | null
-  canSeeAvailability: boolean
-  open: boolean
-  onClose: () => void
-  onInvite: (friendId: string) => void
-}
 
-export function FriendProfileSheet({ friend, availability, canSeeAvailability, open, onClose, onInvite }: FriendProfileSheetProps) {
+export function FriendProfileSheet({ friend, availability, canSeeAvailability, open, onClose, onInvite, onAuthLevelChange }) {
   if (!friend) return null
 
   // count free blocks this week
@@ -142,7 +133,7 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, o
                         {DAYS.map((_, dayIdx) => (
                           <div key={dayIdx} className="h-8">
                             <AvailabilityCell
-                              value={availability?.[dayIdx as DayIndex]?.[block.key]}
+                              value={availability?.[dayIdx]?.[block.key]}
                             />
                           </div>
                         ))}

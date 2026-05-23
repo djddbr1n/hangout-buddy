@@ -5,22 +5,13 @@ import { Bell, Clock, Check } from 'lucide-react'
 import { useState } from 'react'
 import { format } from 'date-fns'
 
-interface MockNotif {
-  id: string
-  type: string
-  title: string
-  body: string
-  time: Date
-  read: boolean
-  urgent?: boolean
-}
 
-const mock: MockNotif[] = [
+const mock = [
   {
     id: 'n1',
     type: 'reminder',
     title: '⏰ Reminder — maybe RSVP',
-    body: 'You marked "Surprise adventure 🎲" as maybe. Still in? It starts in 3 hrs.',
+    body: 'You marked "Surprise adventure 🎲". Still in? It starts in 3 hrs.',
     time: new Date(),
     read: false,
     urgent: true,
@@ -28,7 +19,7 @@ const mock: MockNotif[] = [
   {
     id: 'n2',
     type: 'rsvp',
-    title: '🎉 @tay is going!',
+    title: '🎉 @tay is going',
     body: 'Taylor Kim joined your "Monday Cafe Crawl ☕" — 1 spot left.',
     time: new Date(Date.now() - 20 * 60 * 1000),
     read: false,
@@ -54,11 +45,11 @@ const mock: MockNotif[] = [
 export default function NotificationsPage() {
   const [notifs, setNotifs] = useState(mock)
 
-  const markRead = (id: string) => setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  const markRead = (id) => setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
 
-  const handleMaybeConfirm = (id: string, confirmed: boolean) => {
+  const handleMaybeConfirm = (id, confirmed) => {
     setNotifs(prev => prev.map(n => n.id === id
-      ? { ...n, read: true, body: confirmed ? '✅ Confirmed as going!' : '❌ Removed from the hangout.' }
+      ? { ...n, read: true, body: confirmed ? '✅ Confirmed' : '❌ Removed from the hangout.' }
       : n
     ))
   }

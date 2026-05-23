@@ -1,8 +1,4 @@
-import { HangoutPost, TimeBlock, DayIndex, WeekAvailability } from '@/types'
-
-export type BlockState = 'committed' | 'pending' | 'free' | 'busy' | 'unknown'
-
-const BLOCK_HOURS: Record<TimeBlock, [number, number]> = {
+const BLOCK_HOURS = {
   early_morning: [0, 10],
   brunch:        [10, 14],
   afternoon:     [14, 17],
@@ -10,30 +6,26 @@ const BLOCK_HOURS: Record<TimeBlock, [number, number]> = {
   late_night:    [20, 24],
 }
 
-function getBlock(hour: number): TimeBlock | null {
-  for (const [key, [start, end]] of Object.entries(BLOCK_HOURS) as [TimeBlock, [number, number]][]) {
+function getBlock(hour) {
+  for (const [key, [start, end]] of Object.entries(BLOCK_HOURS)) {
     if (hour >= start && hour < end) return key
   }
   return null
 }
 
 // JS getDay: 0=Sun,1=Mon... → convert to 0=Mon,6=Sun
-function jsDayToIndex(jsDay: number): DayIndex {
-  return ((jsDay + 6) % 7) as DayIndex
+function jsDayToIndex(jsDay) {
+  return ((jsDay + 6) % 7)
 }
 
-export function computeMyBlockStates(
-  myUserId: string,
-  hangouts: HangoutPost[],
-  myAvailability: WeekAvailability,
-): Record<DayIndex, Partial<Record<TimeBlock, BlockState>>> {
-  const result: Record<number, Partial<Record<TimeBlock, BlockState>>> = {}
+export function computeMyBlockStates(myUserId, hangouts, myAvailability) {
+  const result = {}
 
   // Seed from base availability
   for (let d = 0; d < 7; d++) {
     result[d] = {}
-    const dayAvail = myAvailability[d as DayIndex]
-    for (const block of Object.keys(BLOCK_HOURS) as TimeBlock[]) {
+    const dayAvail = myAvailability[d]
+    for (const block of Object.keys(BLOCK_HOURS)) {
       const avail = dayAvail?.[block]
       result[d][block] = avail === true ? 'free' : avail === false ? 'busy' : 'unknown'
     }
@@ -58,5 +50,5 @@ export function computeMyBlockStates(
     }
   }
 
-  return result as Record<DayIndex, Partial<Record<TimeBlock, BlockState>>>
+  return result
 }

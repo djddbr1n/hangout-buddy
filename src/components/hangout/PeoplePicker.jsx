@@ -4,25 +4,19 @@ import { motion } from 'framer-motion'
 import { useCallback } from 'react'
 import { PeopleScene } from './PeopleScene'
 
-const VIBE: Record<number, string> = {
+const VIBE = {
   1: 'just you two 🫶',
   2: 'duo hangout 🫂',
   3: 'small crew ✨',
   4: 'squad mode 🎉',
   5: 'crew of five 🔥',
 }
-const vibeLabel = (n: number) => VIBE[n] ?? (n <= 7 ? 'big group energy 🎊' : 'full squad 🏟️')
+const vibeLabel = (n) => VIBE[n] ?? (n <= 7 ? 'big group energy 🎊' : 'full squad 🏟️')
 
-interface PeoplePickerProps {
-  value: number
-  onChange: (n: number) => void
-  min?: number
-  max?: number
-}
 
-export function PeoplePicker({ value, onChange, min = 2, max = 10 }: PeoplePickerProps) {
+export function PeoplePicker({ value, onChange, min = 2, max = 10 }) {
   const handleInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => onChange(Number(e.target.value)),
+    (e) => onChange(Number(e.target.value)),
     [onChange]
   )
 

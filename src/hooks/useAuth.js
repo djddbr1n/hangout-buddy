@@ -2,24 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-client'
-import type { User } from '@supabase/supabase-js'
 
-export interface Profile {
-  id: string
-  name: string
-  nickname: string
-  avatar_emoji: string
-}
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const supabase = createClient()
 
-    async function fetchProfile(userId: string) {
+    async function fetchProfile(userId) {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
       setProfile(data)
       setLoading(false)

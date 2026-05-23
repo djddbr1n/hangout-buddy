@@ -2,22 +2,15 @@
 
 import { motion } from 'framer-motion'
 import { MapPin, Clock, Users, Sparkles, ChevronRight } from 'lucide-react'
-import { HangoutPost, User } from '@/types'
 import { format } from 'date-fns'
 
-const ACTIVITY_COLORS: Record<string, string> = {
+const ACTIVITY_COLORS = {
   'Coffee & Chill': 'from-amber-50 to-orange-50',
   'default':        'from-violet-50 to-pink-50',
 }
 
-interface HangoutCardProps {
-  hangout: HangoutPost
-  currentUser: User
-  friendIds: string[]
-  onOpen: (hangout: HangoutPost) => void
-}
 
-export function HangoutCard({ hangout, currentUser, friendIds, onOpen }: HangoutCardProps) {
+export function HangoutCard({ hangout, currentUser, friendIds, onOpen }) {
   const goingCount = hangout.rsvps?.filter(r => r.status === 'going').length ?? 0
   const maybeCount = hangout.rsvps?.filter(r => r.status === 'maybe').length ?? 0
   const myRSVP = hangout.rsvps?.find(r => r.user_id === currentUser.id)

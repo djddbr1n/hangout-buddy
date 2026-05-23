@@ -17,15 +17,11 @@ const DEFAULT_OPTIONS = [
   'Bouldering gym 🧗',
 ]
 
-interface SurpriseSpinnerProps {
-  options?: string[]
-  onSelect?: (option: string) => void
-}
 
-export function SurpriseSpinner({ options = DEFAULT_OPTIONS, onSelect }: SurpriseSpinnerProps) {
-  const [current, setCurrent] = useState<string | null>(null)
+export function SurpriseSpinner({ options = DEFAULT_OPTIONS, onSelect }) {
+  const [current, setCurrent] = useState(null)
   const [spinning, setSpinning] = useState(false)
-  const [history, setHistory] = useState<string[]>([])
+  const [history, setHistory] = useState([])
 
   const spin = useCallback(() => {
     if (spinning) return
