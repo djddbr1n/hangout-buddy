@@ -33,7 +33,7 @@ export function AvailabilityStrip({ blockStates, activeBlock, onBlockClick }) {
       </div>
 
       <div className="space-y-1">
-        <div className="grid grid-cols-8 gap-1">
+        <div className="grid gap-1" style={{ gridTemplateColumns: '28px repeat(7, 1fr)' }}>
           <div />
           {DAYS.map((d, i) => (
             <div key={i} className={`text-center text-[10px] font-bold leading-none pb-0.5 ${i === todayIdx ? 'text-violet-600' : 'text-gray-400'}`}>
@@ -46,7 +46,7 @@ export function AvailabilityStrip({ blockStates, activeBlock, onBlockClick }) {
         {BLOCKS.map(block => {
           const isActive = activeBlock === block
           return (
-            <div key={block} className="grid grid-cols-8 gap-1 items-center">
+            <div key={block} className="grid gap-1 items-center" style={{ gridTemplateColumns: '28px repeat(7, 1fr)' }}>
               {/* emoji label — tappable if onBlockClick provided */}
               <button
                 onClick={() => onBlockClick?.(isActive ? null : block)}

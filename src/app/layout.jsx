@@ -1,5 +1,6 @@
 import "./globals.css";
 import { BottomNav } from "@/components/shared/BottomNav";
+import { SWUpdateWatcher } from "@/components/shared/SWUpdateWatcher";
 
 export const metadata = {
   title: "hangout buddy",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-full bg-gray-50 antialiased">
         {children}
         <BottomNav />
+        <SWUpdateWatcher />
       </body>
     </html>
   );

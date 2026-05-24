@@ -1,3 +1,13 @@
+// ── Update lifecycle ────────────────────────────────────────────────────────
+// Skip the waiting phase immediately so new SW takes over as soon as it installs
+self.addEventListener('install', () => self.skipWaiting())
+
+// Claim all open clients so this SW controls them without a manual reload
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
+// ── Push notifications ───────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return
   let data = {}
