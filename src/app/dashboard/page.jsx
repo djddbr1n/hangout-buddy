@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Bell, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
@@ -8,12 +8,11 @@ import { format } from 'date-fns'
 import { HangoutCard } from '@/components/hangout/HangoutCard'
 import { CreateHangoutSheet } from '@/components/hangout/CreateHangoutSheet'
 import { HangoutDetailSheet } from '@/components/hangout/HangoutDetailSheet'
-import { AvailabilityStrip } from '@/components/shared/AvailabilityStrip'
-import { computeMyBlockStates } from '@/lib/availability-utils'
+import { FriendFreeStrip } from '@/components/shared/FriendFreeStrip'
 import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase-client'
 import { getCache, setCache } from '@/lib/page-cache'
-import { sendPushToUser } from '@/app/actions'
+import { sendPushToUser, getFriendFreeBusy } from '@/app/actions'
 
 // ── My Events: folded stack that expands ──────────────────────────────────────
 function MyEventsSection({ events, profile, friendIds, onOpen }) {
@@ -136,13 +135,37 @@ function MyEventsSection({ events, profile, friendIds, onOpen }) {
 export default function DashboardPage() {
   const { profile } = useAuth()
   const [hangouts, setHangouts] = useState([])
-  const [availability, setAvailability] = useState({})
   const [friendIds, setFriendIds] = useState([])
+  const [friendProfiles, setFriendProfiles] = useState({})
+  const [friendFreeBusy, setFriendFreeBusy] = useState({})
+  const [calLoading, setCalLoading] = useState(false)
   const [invitedHangoutIds, setInvitedHangoutIds] = useState(new Set())
   const [unreadCount, setUnreadCount] = useState(0)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [detailHangout, setDetailHangout] = useState(null)
   const [editHangout, setEditHangout] = useState(null)
+
+  // ── Deep-link: ?hangout=<id> from push notification click ────────────────
+  const [pendingHangoutId, setPendingHangoutId] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('hangout')
+    if (id) {
+      setPendingHangoutId(id)
+      // Clean the URL without a reload
+      window.history.replaceState({}, '', '/dashboard')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!pendingHangoutId || hangouts.length === 0) return
+    const found = hangouts.find(h => h.id === pendingHangoutId)
+    if (found) {
+      setDetailHangout(found)
+      setPendingHangoutId(null)
+    }
+  }, [pendingHangoutId, hangouts])
 
   // ── Filters ───────────────────────────────────────────────────────────────
   const [activeTimeBlock, setActiveTimeBlock] = useState(null)
@@ -155,7 +178,6 @@ export default function DashboardPage() {
     const cached = getCache(`dashboard-${profile.id}`)
     if (cached) {
       setHangouts(cached.hangouts)
-      setAvailability(cached.availability)
       setFriendIds(cached.friendIds)
       setInvitedHangoutIds(cached.invitedHangoutIds)
     }
@@ -165,41 +187,54 @@ export default function DashboardPage() {
   async function fetchData() {
     const supabase = createClient()
 
-    const [{ data: friendships }, { data: hangoutsData }, { data: availData }, { data: inviteData }, { count: unread }] = await Promise.all([
-      supabase.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted'),
+    const [{ data: friendships }, { data: hangoutsData }, { data: inviteData }, { count: unread }, { data: reverseGrants }] = await Promise.all([
+      supabase.from('friendships')
+        .select('friend_id, friend:profiles!friend_id(id,name,nickname,avatar_emoji)')
+        .eq('user_id', profile.id).eq('status', 'accepted'),
       supabase.from('hangout_posts')
         .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
-        // fetch up to 8 h in the past so ongoing events stay visible
         .gte('date_time', new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString())
         .order('date_time', { ascending: true }),
-      supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
       supabase.from('notifications').select('hangout_id').eq('user_id', profile.id).eq('type', 'invite').not('hangout_id', 'is', null),
       supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', profile.id).eq('read', false),
+      // What each friend has granted ME (for GCal access)
+      supabase.from('friendships').select('user_id, auth_level').eq('friend_id', profile.id).eq('status', 'accepted'),
     ])
 
-    const ids = (friendships ?? []).map((f) => f.friend_id)
+    const ids = (friendships ?? []).map(f => f.friend_id)
     const hangoutList = hangoutsData ?? []
     const invitedIds = new Set((inviteData ?? []).map(n => n.hangout_id))
 
+    // Build friend profile map
+    const profileMap = {}
+    for (const f of friendships ?? []) {
+      if (f.friend) profileMap[f.friend_id] = f.friend
+    }
+
+    // Build reverse auth map
+    const reverseMap = {}
+    for (const r of reverseGrants ?? []) reverseMap[r.user_id] = r.auth_level
+
     setFriendIds(ids)
+    setFriendProfiles(profileMap)
     setHangouts(hangoutList)
     setInvitedHangoutIds(invitedIds)
-
-    const avail = {}
-    for (const row of availData ?? []) {
-      const day = row.day_index
-      if (!avail[day]) avail[day] = {}
-      ;(avail[day])[row.block] = row.available
-    }
-    setAvailability(avail)
     setUnreadCount(unread ?? 0)
-    setCache(`dashboard-${profile.id}`, { hangouts: hangoutList, availability: avail, friendIds: ids, invitedHangoutIds: invitedIds })
-  }
+    setCache(`dashboard-${profile.id}`, { hangouts: hangoutList, friendIds: ids, invitedHangoutIds: invitedIds })
 
-  const blockStates = useMemo(
-    () => profile ? computeMyBlockStates(profile.id, hangouts, availability) : {},
-    [profile, hangouts, availability]
-  )
+    // Fire off GCal fetches for friends who granted us access — non-blocking
+    const calFriends = ids.filter(id => reverseMap[id] === 'can_see_availability')
+    if (calFriends.length > 0) {
+      setCalLoading(true)
+      Promise.all(calFriends.map(id => getFriendFreeBusy(id).then(r => ({ id, ...r }))))
+        .then(results => {
+          const fbMap = {}
+          for (const r of results) { if (r.connected) fbMap[r.id] = r.busy ?? [] }
+          setFriendFreeBusy(fbMap)
+        })
+        .finally(() => setCalLoading(false))
+    }
+  }
 
   const updateHangoutRsvps = (hangoutId, userId, status, userObj) =>
     (h) => {
@@ -263,8 +298,14 @@ export default function DashboardPage() {
       const supabase2 = createClient()
       supabase2.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted')
         .then(({ data: friends }) => {
+          const timeStr = format(new Date(data.date_time), 'EEE MMM d · h:mm a')
           for (const { friend_id } of friends ?? []) {
-            sendPushToUser(friend_id, `${profile.name} posted a hangout`, `"${data.title}" — tap to see it`).catch(() => {})
+            sendPushToUser(
+              friend_id,
+              `${profile.name} posted a hangout`,
+              `"${data.title}" · ${timeStr}`,
+              `/dashboard?hangout=${data.id}`
+            ).catch(() => {})
           }
         })
     }
@@ -358,10 +399,12 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="max-w-md mx-auto">
-          <AvailabilityStrip
-            blockStates={blockStates}
+          <FriendFreeStrip
+            friendFreeBusy={friendFreeBusy}
+            friendProfiles={friendProfiles}
             activeBlock={activeTimeBlock}
             onBlockClick={setActiveTimeBlock}
+            calLoading={calLoading}
           />
         </div>
       </div>

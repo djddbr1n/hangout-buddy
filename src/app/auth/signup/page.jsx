@@ -21,7 +21,23 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [nicknameError, setNicknameError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  async function handleProfileNext() {
+    setNicknameError('')
+    const supabase = createClient()
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('nickname', nickname.toLowerCase())
+      .maybeSingle()
+    if (existing) {
+      setNicknameError('that nickname is already taken')
+      return
+    }
+    setStep('account')
+  }
 
   async function handleSubmit() {
     if (!email || !password || !name || !nickname) return
@@ -30,7 +46,16 @@ export default function SignupPage() {
 
     const supabase = createClient()
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
-    if (authError) { setError(authError.message); setLoading(false); return }
+    if (authError) {
+      const msg = authError.message.toLowerCase()
+      if (msg.includes('already registered') || msg.includes('already exists')) {
+        setError('an account with that email already exists — try signing in')
+      } else {
+        setError(authError.message)
+      }
+      setLoading(false)
+      return
+    }
 
     if (authData.user) {
       const { error: profileError } = await supabase.from('profiles').insert({
@@ -144,16 +169,17 @@ export default function SignupPage() {
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">@</span>
                     <input
                       value={nickname}
-                      onChange={e => setNickname(e.target.value.replace('@', '').toLowerCase())}
+                      onChange={e => { setNickname(e.target.value.replace('@', '').toLowerCase()); setNicknameError('') }}
                       placeholder="alex"
-                      className="w-full rounded-xl border border-gray-200 pl-7 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      className={`w-full rounded-xl border pl-7 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 ${nicknameError ? 'border-red-300' : 'border-gray-200'}`}
                     />
                   </div>
+                  {nicknameError && <p className="text-xs text-red-500 mt-1">{nicknameError}</p>}
                 </div>
 
                 <motion.button
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => setStep('account')}
+                  onClick={handleProfileNext}
                   disabled={!name || !nickname}
                   className="w-full py-3 rounded-2xl bg-violet-500 text-white font-semibold text-sm disabled:opacity-40"
                 >

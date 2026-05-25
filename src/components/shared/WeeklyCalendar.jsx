@@ -2,144 +2,169 @@
 
 import { format, startOfWeek, addDays } from 'date-fns'
 
-const START_HOUR = 7   // 7am
-const END_HOUR = 22    // 10pm
-const TOTAL_MS = (END_HOUR - START_HOUR) * 60 * 60 * 1000
+const START_HOUR  = 7    // 7 am
+const END_HOUR    = 22   // 10 pm
+const HOUR_H      = 20   // px per hour
+const TOTAL_H     = (END_HOUR - START_HOUR) * HOUR_H   // 300px
+const TIME_TICKS  = [7, 10, 13, 16, 19, 22]            // labels every 3 h
 
 function getWeekDays() {
   const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i))
 }
 
+function formatHour(h) {
+  if (h === 0 || h === 24) return '12am'
+  if (h === 12) return '12pm'
+  return h < 12 ? `${h}am` : `${h - 12}pm`
+}
+
 function busyBlocksForDay(date, busySlots) {
   const dayStart = new Date(date); dayStart.setHours(START_HOUR, 0, 0, 0)
-  const dayEnd   = new Date(date); dayEnd.setHours(END_HOUR, 0, 0, 0)
-
-  return busySlots
-    .map(s => ({ start: new Date(s.start), end: new Date(s.end) }))
-    .filter(({ start, end }) => start < dayEnd && end > dayStart)
-    .map(({ start, end }) => {
-      const cs = Math.max(start.getTime(), dayStart.getTime())
-      const ce = Math.min(end.getTime(), dayEnd.getTime())
+  const dayEnd   = new Date(date); dayEnd.setHours(END_HOUR,   0, 0, 0)
+  return (busySlots ?? [])
+    .map(s => ({ s: new Date(s.start), e: new Date(s.end) }))
+    .filter(({ s, e }) => s < dayEnd && e > dayStart)
+    .map(({ s, e }) => {
+      const cs = Math.max(s.getTime(), dayStart.getTime())
+      const ce = Math.min(e.getTime(), dayEnd.getTime())
       return {
-        left:  ((cs - dayStart.getTime()) / TOTAL_MS) * 100,
-        width: ((ce - cs) / TOTAL_MS) * 100,
+        top:    ((cs - dayStart.getTime()) / 3_600_000) * HOUR_H,
+        height: Math.max(((ce - cs) / 3_600_000) * HOUR_H, 4),
       }
     })
 }
 
-function NowLine({ date }) {
+function nowTop() {
   const now = new Date()
-  if (now.toDateString() !== date.toDateString()) return null
-  const dayStart = new Date(date); dayStart.setHours(START_HOUR, 0, 0, 0)
-  const dayEnd   = new Date(date); dayEnd.setHours(END_HOUR, 0, 0, 0)
-  if (now < dayStart || now > dayEnd) return null
-  const left = ((now.getTime() - dayStart.getTime()) / TOTAL_MS) * 100
+  const ref = new Date(); ref.setHours(START_HOUR, 0, 0, 0)
+  const end = new Date(); end.setHours(END_HOUR,   0, 0, 0)
+  if (now < ref || now > end) return null
+  return ((now - ref) / 3_600_000) * HOUR_H
+}
+
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+function Skeleton() {
   return (
-    <div
-      className="absolute top-0 bottom-0 w-0.5 bg-violet-500 z-10"
-      style={{ left: `${left}%` }}
-    />
+    <div className="space-y-2 py-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="w-7 h-2.5 bg-gray-100 rounded-full animate-pulse shrink-0" />
+          <div className="flex-1 h-6 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
   )
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export function WeeklyCalendar({ busy, loading, notConnected }) {
   const weekDays = getWeekDays()
   const todayStr = new Date().toDateString()
+  const yNow     = nowTop()
+  const TIME_COL = 28 // px
 
-  if (loading) {
-    return (
-      <div className="space-y-2 py-1">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <div className="w-[58px] shrink-0 space-y-1">
-              <div className="h-2.5 bg-gray-100 rounded-full animate-pulse w-7" />
-              <div className="h-2 bg-gray-100 rounded-full animate-pulse w-11" />
-            </div>
-            <div className="flex-1 h-7 bg-gray-100 rounded-lg animate-pulse" />
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  if (notConnected) {
-    return (
-      <div className="flex flex-col items-center py-8 gap-2 bg-gray-50 rounded-2xl">
-        <p className="text-xl">📅</p>
-        <p className="text-sm font-medium text-gray-600">calendar not connected</p>
-        <p className="text-xs text-gray-400">they haven't linked Google Calendar yet</p>
-      </div>
-    )
-  }
+  if (loading)      return <Skeleton />
+  if (notConnected) return (
+    <div className="flex flex-col items-center py-8 gap-2 bg-gray-50 rounded-2xl">
+      <p className="text-xl">📅</p>
+      <p className="text-sm font-medium text-gray-600">calendar not connected</p>
+      <p className="text-xs text-gray-400">they haven't linked Google Calendar yet</p>
+    </div>
+  )
 
   return (
-    <div>
-      {/* time axis */}
-      <div className="flex items-center mb-1.5" style={{ paddingLeft: 70 }}>
-        <div className="flex-1 flex justify-between">
-          <span className="text-[9px] text-gray-300">7am</span>
-          <span className="text-[9px] text-gray-300">10pm</span>
-        </div>
-      </div>
+    <div className="select-none overflow-hidden">
 
-      {/* day rows */}
-      <div className="space-y-1.5">
+      {/* ── Day header row ── */}
+      <div className="flex mb-1" style={{ paddingLeft: TIME_COL }}>
         {weekDays.map(day => {
           const isToday = day.toDateString() === todayStr
-          const isPast  = day < new Date() && !isToday
-          const blocks  = busyBlocksForDay(day, busy ?? [])
-
           return (
-            <div key={day.toISOString()} className={`flex items-center gap-3 ${isPast ? 'opacity-40' : ''}`}>
-              {/* label */}
-              <div className="w-[58px] shrink-0 text-right">
-                <p className={`text-[11px] font-bold leading-none ${isToday ? 'text-violet-600' : 'text-gray-500'}`}>
-                  {format(day, 'EEE')}
-                </p>
-                <p className={`text-[10px] leading-none mt-0.5 ${isToday ? 'text-violet-400' : 'text-gray-400'}`}>
-                  {format(day, 'MMM d')}
-                </p>
-              </div>
-
-              {/* bar */}
-              <div className="flex-1 relative h-7 rounded-lg overflow-hidden">
-                {/* free background */}
-                <div className="absolute inset-0 bg-emerald-50" />
-
-                {/* busy blocks */}
-                {blocks.map((b, i) => (
-                  <div
-                    key={i}
-                    className="absolute top-0 bottom-0 bg-gray-200"
-                    style={{ left: `${b.left}%`, width: `${b.width}%` }}
-                  />
-                ))}
-
-                <NowLine date={day} />
-
-                {/* today highlight ring */}
-                {isToday && (
-                  <div className="absolute inset-0 rounded-lg ring-2 ring-violet-300 ring-inset pointer-events-none" />
-                )}
-              </div>
+            <div key={day.toISOString()} className="flex-1 text-center">
+              <p className={`text-[10px] font-bold uppercase tracking-wide leading-none ${isToday ? 'text-violet-500' : 'text-gray-400'}`}>
+                {format(day, 'EEE')}
+              </p>
+              <p className={`text-[11px] font-semibold leading-tight mt-0.5 ${isToday ? 'text-violet-600' : 'text-gray-500'}`}>
+                {format(day, 'M/d')}
+              </p>
             </div>
           )
         })}
       </div>
 
-      {/* legend */}
-      <div className="flex items-center gap-4 pt-3" style={{ paddingLeft: 70 }}>
+      {/* ── Grid body ── */}
+      <div className="flex relative" style={{ height: TOTAL_H }}>
+
+        {/* Time labels */}
+        <div className="relative shrink-0" style={{ width: TIME_COL }}>
+          {TIME_TICKS.map(h => (
+            <span
+              key={h}
+              className="absolute right-1 text-[9px] text-gray-300 leading-none"
+              style={{ top: (h - START_HOUR) * HOUR_H - 4 }}
+            >
+              {formatHour(h)}
+            </span>
+          ))}
+        </div>
+
+        {/* Day columns */}
+        {weekDays.map((day, di) => {
+          const isToday = day.toDateString() === todayStr
+          const isPast  = day < new Date() && !isToday
+          const blocks  = busyBlocksForDay(day, busy)
+
+          return (
+            <div
+              key={day.toISOString()}
+              className={`flex-1 relative border-l border-gray-100 ${isToday ? 'bg-violet-50/50' : 'bg-white'} ${isPast ? 'opacity-50' : ''}`}
+            >
+              {/* Hour tick lines */}
+              {TIME_TICKS.map(h => (
+                <div
+                  key={h}
+                  className="absolute inset-x-0 border-t border-gray-100"
+                  style={{ top: (h - START_HOUR) * HOUR_H }}
+                />
+              ))}
+
+              {/* Busy blocks — visible colored fill */}
+              {blocks.map((b, i) => (
+                <div
+                  key={i}
+                  className="absolute inset-x-px rounded-sm bg-slate-400/70"
+                  style={{ top: b.top, height: b.height }}
+                />
+              ))}
+
+              {/* Now line (today only) */}
+              {isToday && yNow !== null && (
+                <div
+                  className="absolute inset-x-0 z-10 flex items-center"
+                  style={{ top: yNow - 1 }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 -ml-0.5 shrink-0" />
+                  <div className="flex-1 h-px bg-red-400" />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Legend ── */}
+      <div className="flex items-center gap-4 pt-2" style={{ paddingLeft: TIME_COL + 4 }}>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-emerald-50 ring-1 ring-emerald-200" />
+          <div className="w-3 h-3 rounded-sm bg-white border border-gray-200" />
           <span className="text-[10px] text-gray-400">free</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-gray-200" />
+          <div className="w-3 h-3 rounded-sm bg-slate-400/70" />
           <span className="text-[10px] text-gray-400">busy</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-0.5 h-3 rounded-full bg-violet-500" />
+          <div className="w-3 h-px bg-red-400" />
           <span className="text-[10px] text-gray-400">now</span>
         </div>
       </div>

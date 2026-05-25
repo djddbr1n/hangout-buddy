@@ -11,7 +11,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { usePush } from '@/hooks/usePush'
 import { HangoutDetailSheet } from '@/components/hangout/HangoutDetailSheet'
-import { disconnectGoogle } from '@/app/actions'
+import { disconnectGoogle, getFriendFreeBusy } from '@/app/actions'
+import { WeeklyCalendar } from '@/components/shared/WeeklyCalendar'
 
 function PastHangoutCard({ hangout, profileId, onOpen }) {
   const isHost    = hangout.creator_id === profileId
@@ -54,6 +55,8 @@ export default function ProfilePage() {
   const router = useRouter()
   const { supported: pushSupported, subscription: pushSub, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePush(profile?.id)
   const [gcalConnected, setGcalConnected] = useState(null)
+  const [myBusy, setMyBusy] = useState(null)
+  const [myCalLoading, setMyCalLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [editName, setEditName] = useState('')
   const [editAvatar, setEditAvatar] = useState('')
@@ -111,6 +114,15 @@ export default function ProfilePage() {
       setPastHangouts(merged)
     })
   }, [profile?.id])
+
+  // Fetch own calendar whenever gcal becomes connected
+  useEffect(() => {
+    if (!gcalConnected || !profile) return
+    setMyCalLoading(true)
+    getFriendFreeBusy(profile.id)
+      .then(result => { if (result.connected) setMyBusy(result.busy ?? []) })
+      .finally(() => setMyCalLoading(false))
+  }, [gcalConnected, profile?.id])
 
   async function handleDisconnectGcal() {
     await disconnectGoogle()
@@ -197,6 +209,18 @@ export default function ProfilePage() {
               </a>
             ) : null}
           </div>
+
+          {/* Own calendar preview */}
+          {gcalConnected && (
+            <div className="mt-4 pt-4 border-t border-gray-50">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">your calendar this week</p>
+              <WeeklyCalendar
+                busy={myBusy}
+                loading={myCalLoading}
+                notConnected={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* archived hangouts */}
@@ -276,6 +300,8 @@ export default function ProfilePage() {
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              drag="y" dragConstraints={{ top: 0 }} dragElastic={{ top: 0, bottom: 0.3 }}
+              onDragEnd={(_, { offset, velocity }) => { if (offset.y > 80 || velocity.y > 500) setShowSettings(false) }}
               className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[85vh] overflow-y-auto"
             >
               <div className="flex justify-center pt-3 pb-1">
