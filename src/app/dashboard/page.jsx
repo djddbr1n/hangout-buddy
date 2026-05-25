@@ -23,11 +23,11 @@ function MyEventsSection({ events, profile, onOpen }) {
 
   return (
     <div className="mb-1">
-      <div className="bg-gray-50 rounded-2xl overflow-hidden">
+      <div className="bg-white/90 backdrop-blur-md border border-white/60 rounded-2xl overflow-hidden shadow">
         {/* header row — tap to collapse */}
         <button
           onClick={() => setExpanded(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 border-b border-gray-100"
+          className="w-full flex items-center justify-between px-5 py-3.5 border-b border-white/60"
         >
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-violet-500 uppercase tracking-wide">my events</span>
@@ -61,7 +61,7 @@ function MyEventsSection({ events, profile, onOpen }) {
                     whileTap={{ scale: 0.99 }}
                     onClick={() => onOpen(h)}
                     className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors active:bg-gray-100 ${
-                      i < events.length - 1 ? 'border-b border-gray-100' : ''
+                      i < events.length - 1 ? 'border-b border-white/60' : ''
                     }`}
                   >
                     <span className="text-2xl shrink-0">{h.creator?.avatar_emoji ?? '👤'}</span>
@@ -455,9 +455,9 @@ export default function DashboardPage() {
   if (!profile) return null
 
   return (
-    <div className="min-h-screen bg-violet-100">
-      {/* ── Header + filters on a gradient background ── */}
-      <div className="bg-gradient-to-b from-violet-100 via-violet-50/60 to-white px-5 pt-12 pb-4">
+    <div className="min-h-screen bg-white bg-gradient-to-b from-violet-100 via-violet-50/10 to-transparent pb-[env(safe-area-inset-bottom)]">
+      {/* ── Header + filters ── */}
+      <div className="px-5 pt-12 pb-4">
         {/* Top row: title + actions */}
         <div className="max-w-md mx-auto flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">
@@ -550,7 +550,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="bg-white">
       <div className="max-w-md mx-auto px-4 pb-28">
         {(() => {
           const now = new Date()
@@ -652,7 +651,6 @@ export default function DashboardPage() {
             </div>
           )
         })()}
-      </div>
       </div>
 
       <CreateHangoutSheet open={sheetOpen} onClose={() => { setSheetOpen(false); setPrefillData(null) }} onCreate={handleCreate} prefill={prefillData} />

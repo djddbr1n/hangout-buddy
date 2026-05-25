@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-full bg-violet-100 antialiased">
+      <body className="min-h-full bg-white antialiased">
         {children}
         <BottomNav />
         <SWUpdateWatcher />
