@@ -4,11 +4,41 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, Settings, X, Bell, BellOff, Smartphone } from 'lucide-react'
+import { LogOut, Settings, X, Bell, BellOff, Smartphone, ChevronDown, Archive } from 'lucide-react'
+import { format } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { usePush } from '@/hooks/usePush'
+
+function PastHangoutCard({ hangout, profileId }) {
+  const isHost  = hangout.creator_id === profileId
+  const myRsvp  = hangout.rsvps?.find(r => r.user_id === profileId)
+  const wentCount = hangout.rsvps?.filter(r => r.status === 'going').length ?? 0
+
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
+      <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-lg shrink-0">
+        {hangout.creator?.avatar_emoji ?? '👤'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-500 truncate">{hangout.title}</p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {format(new Date(hangout.date_time), 'MMM d, yyyy · h:mm a')}
+          {wentCount > 0 && ` · ${wentCount} went`}
+        </p>
+      </div>
+      <div className="shrink-0">
+        {isHost && (
+          <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">hosted</span>
+        )}
+        {!isHost && myRsvp?.status === 'going' && (
+          <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">went</span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const TIME_BLOCKS = [
   { key: 'early_morning', emoji: '🌅', label: 'Early', time: 'before 10am' },
@@ -33,23 +63,56 @@ export default function ProfilePage() {
   const [customEmoji, setCustomEmoji] = useState('')
   const [customMode, setCustomMode] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
+  const [pastHangouts, setPastHangouts] = useState([])
+  const [showArchive, setShowArchive] = useState(false)
 
   useEffect(() => {
     if (!profile) return
     setEditName(profile.name ?? '')
     setEditAvatar(profile.avatar_emoji ?? '🦊')
     const supabase = createClient()
-    supabase
-      .from('availability')
-      .select('day_index,block,available')
-      .eq('user_id', profile.id)
-      .then(({ data }) => {
-        const avail = {}
-        for (const row of data ?? []) {
-          avail[`${row.day_index}-${row.block}`] = row.available
-        }
-        setAvailability(avail)
-      })
+    const now = new Date().toISOString()
+
+    // Fetch availability + past hangouts in parallel
+    Promise.all([
+      supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
+      // Past hangouts I hosted
+      supabase.from('hangout_posts')
+        .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(user_id,status)')
+        .eq('creator_id', profile.id)
+        .lt('date_time', now)
+        .order('date_time', { ascending: false })
+        .limit(30),
+      // My past RSVPs (to find hangouts I attended but didn't host)
+      supabase.from('rsvps').select('hangout_id').eq('user_id', profile.id),
+    ]).then(async ([{ data: availData }, { data: hosted }, { data: myRsvps }]) => {
+      // Availability
+      const avail = {}
+      for (const row of availData ?? []) {
+        avail[`${row.day_index}-${row.block}`] = row.available
+      }
+      setAvailability(avail)
+
+      // Past attended hangouts (not hosted by me)
+      const rsvpIds = (myRsvps ?? []).map(r => r.hangout_id)
+      let attended = []
+      if (rsvpIds.length > 0) {
+        const { data } = await supabase
+          .from('hangout_posts')
+          .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(user_id,status)')
+          .in('id', rsvpIds)
+          .neq('creator_id', profile.id)
+          .lt('date_time', now)
+          .order('date_time', { ascending: false })
+          .limit(30)
+        attended = data ?? []
+      }
+
+      // Merge, dedupe, sort newest first
+      const merged = [...(hosted ?? []), ...attended]
+        .sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
+      setPastHangouts(merged)
+    })
   }, [profile?.id])
 
   async function toggleCell(dayIndex, block) {
@@ -150,6 +213,53 @@ export default function ProfilePage() {
           ))}
 
           <p className="text-[10px] text-gray-400 text-center mt-2">green = free · tap to toggle</p>
+        </div>
+
+        {/* archived hangouts */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <motion.button
+            whileTap={{ scale: 0.99 }}
+            onClick={() => setShowArchive(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3.5"
+          >
+            <div className="flex items-center gap-2">
+              <Archive size={15} className="text-gray-400" />
+              <span className="text-sm font-semibold text-gray-600">past hangouts</span>
+              {pastHangouts.length > 0 && (
+                <span className="text-[11px] bg-gray-100 text-gray-400 rounded-full px-1.5 py-0.5 font-semibold">
+                  {pastHangouts.length}
+                </span>
+              )}
+            </div>
+            <motion.div animate={{ rotate: showArchive ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown size={14} className="text-gray-300" />
+            </motion.div>
+          </motion.button>
+
+          <AnimatePresence>
+            {showArchive && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-3 border-t border-gray-50">
+                  {pastHangouts.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-2xl mb-2">📭</p>
+                      <p className="text-sm text-gray-400">no past hangouts yet</p>
+                    </div>
+                  ) : (
+                    pastHangouts.map(h => (
+                      <PastHangoutCard key={h.id} hangout={h} profileId={profile.id} />
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* sign out */}
