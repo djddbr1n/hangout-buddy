@@ -1,8 +1,8 @@
 # hangout buddy
 
-Coordinating plans with friends is annoying. Group chats devolve into "sounds good!" and then nothing happens. Hangout Buddy fixes that.
+Some hangouts are people-first — you want to spend time with specific friends, and the plan comes second. But a lot of the time it goes the other way. You just finished finals. You want to run a poker night tonight. You want to get matcha in an hour. The activity is decided; the open question is just who's free.
 
-You post a hangout — a time, a place, a vibe — and your friends can see it and RSVP. No polls, no back-and-forth, no "lmk." Just a feed of things actually happening that you can join.
+The current solution is calling or texting a bunch of people individually to check. Hangout Buddy skips that. You post what you want to do, a notification goes out to your friends, and whoever's down can RSVP. That's it.
 
 **Live:** https://hangout-buddy-inky.vercel.app
 
