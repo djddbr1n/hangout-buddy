@@ -83,13 +83,21 @@ create policy "friendships_update" on public.friendships for update to authentic
 create policy "friendships_delete" on public.friendships for delete to authenticated
   using (user_id = auth.uid());
 
--- Hangout posts: see posts from yourself or your friends
+-- Hangout posts: see posts from yourself, your friends, or events you've been invited to / RSVPd to
 create policy "hangouts_select" on public.hangout_posts for select to authenticated
   using (
-    creator_id = auth.uid() or
-    creator_id in (
+    creator_id = auth.uid()
+    or creator_id in (
       select friend_id from public.friendships
       where user_id = auth.uid() and status = 'accepted'
+    )
+    or id in (
+      select hangout_id from public.notifications
+      where user_id = auth.uid() and type = 'invite' and hangout_id is not null
+    )
+    or id in (
+      select hangout_id from public.rsvps
+      where user_id = auth.uid()
     )
   );
 create policy "hangouts_insert" on public.hangout_posts for insert to authenticated
@@ -185,6 +193,25 @@ create policy "push_subs_insert" on public.push_subscriptions for insert to auth
   with check (user_id = auth.uid());
 create policy "push_subs_delete" on public.push_subscriptions for delete to authenticated
   using (user_id = auth.uid());
+
+-- ── Hangout chat messages ──────────────────────────────────────────────
+create table public.messages (
+  id uuid primary key default gen_random_uuid(),
+  hangout_id uuid references public.hangout_posts(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) not null,
+  content text not null check (char_length(content) > 0),
+  created_at timestamptz default now()
+);
+
+create index on public.messages (hangout_id, created_at);
+
+alter table public.messages enable row level security;
+
+-- Anyone authenticated can read messages (hangout feed is already friend-scoped)
+create policy "messages_select" on public.messages for select to authenticated using (true);
+-- Users can only insert their own messages
+create policy "messages_insert" on public.messages for insert to authenticated
+  with check (user_id = auth.uid());
 -- upsert needs update policy too
 create policy "push_subs_update" on public.push_subscriptions for update to authenticated
   using (user_id = auth.uid());

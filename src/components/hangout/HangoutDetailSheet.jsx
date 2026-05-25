@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle, Pencil, CalendarPlus, Trash2, UserPlus } from 'lucide-react'
+import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle, Pencil, CalendarPlus, Trash2, UserPlus, MessageCircle, LayoutList } from 'lucide-react'
 import { format } from 'date-fns'
 import { RSVPButtons } from './RSVPButtons'
 import { SurpriseSpinner } from './SurpriseSpinner'
 import { downloadICS } from '@/lib/ics'
+import { HangoutChat } from './HangoutChat'
 
 // Returns 'free' | 'busy' | null (null = no GCal data)
 function availDuring(busySlots, hangout) {
@@ -38,6 +39,7 @@ export function HangoutDetailSheet({
   const [confirmDelete, setConfirmDelete]   = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
   const [invitedIds, setInvitedIds]         = useState(new Set())
+  const [tab, setTab]                       = useState('details')
 
   if (!hangout) return null
 
@@ -53,11 +55,12 @@ export function HangoutDetailSheet({
     setConfirmDelete(false)
     setShowInvitePanel(false)
     setInvitedIds(new Set())
+    setTab('details')
     onClose()
   }
 
-  // Friends the host can still invite
-  const alreadyInvolved = new Set((hangout.rsvps ?? []).map(r => r.user_id))
+  // Anyone already hosting or RSVPd (going or maybe) is off the invite list
+  const alreadyInvolved = new Set([hangout.creator_id, ...(hangout.rsvps ?? []).map(r => r.user_id)])
   const invitableFriends = Object.values(friendProfiles ?? {}).filter(p => !alreadyInvolved.has(p.id))
 
   return (
@@ -116,6 +119,39 @@ export function HangoutDetailSheet({
               </div>
             </div>
 
+            {/* ── tab switcher ── */}
+            <div className="flex gap-1 px-5 pt-3 pb-1 shrink-0">
+              <button
+                onClick={() => setTab('details')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  tab === 'details'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <LayoutList size={14} />
+                details
+              </button>
+              <button
+                onClick={() => setTab('chat')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  tab === 'chat'
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <MessageCircle size={14} />
+                chat
+              </button>
+            </div>
+
+            {/* ── chat tab ── */}
+            {tab === 'chat' && (
+              <HangoutChat hangoutId={hangout.id} currentUser={currentUser} />
+            )}
+
+            {/* ── details tab ── */}
+            {tab === 'details' && (
             <div className="overflow-y-auto flex-1" onPointerDownCapture={e => e.stopPropagation()}>
             <div className="px-5 py-4 space-y-5 pb-10">
 
@@ -390,6 +426,7 @@ export function HangoutDetailSheet({
               )}
             </div>
             </div>{/* end scrollable content */}
+            )}{/* end details tab */}
           </motion.div>
         </>
       )}
