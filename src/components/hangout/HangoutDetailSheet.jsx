@@ -42,16 +42,7 @@ export function HangoutDetailSheet({
   const [invitedIds, setInvitedIds]           = useState(new Set())
   const [sentRequestIds, setSentRequestIds]   = useState(new Set())
 
-  if (!hangout) return null
-
-  const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going' && r.user_id !== hangout.creator_id) ?? []
-  const maybeRSVPs = hangout.rsvps?.filter(r => r.status === 'maybe') ?? []
-  const myRSVP     = hangout.rsvps?.find(r => r.user_id === currentUser.id)
-  const isMine     = hangout.creator_id === currentUser.id
-  // host always counts as 1, so spots = max - host - going guests
-  const spotsLeft  = hangout.max_people - 1 - goingRSVPs.length
-  const isFull     = spotsLeft <= 0 && !myRSVP
-
+  // Hooks must be called before any early returns
   useEffect(() => {
     if (open) {
       const y = window.scrollY
@@ -68,6 +59,16 @@ export function HangoutDetailSheet({
       document.body.style.top = ''
     }
   }, [open])
+
+  if (!hangout) return null
+
+  const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going' && r.user_id !== hangout.creator_id) ?? []
+  const maybeRSVPs = hangout.rsvps?.filter(r => r.status === 'maybe') ?? []
+  const myRSVP     = hangout.rsvps?.find(r => r.user_id === currentUser.id)
+  const isMine     = hangout.creator_id === currentUser.id
+  // host always counts as 1, so spots = max - host - going guests
+  const spotsLeft  = hangout.max_people - 1 - goingRSVPs.length
+  const isFull     = spotsLeft <= 0 && !myRSVP
 
   const closeAll = () => {
     setConfirmDelete(false)

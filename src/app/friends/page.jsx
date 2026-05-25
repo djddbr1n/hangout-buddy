@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { UserPlus, Search, ChevronRight, Eye, Shield, Check, X, Calendar, ArrowLeft, MessageCircle, Users } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { format } from 'date-fns'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter as useNextRouter } from 'next/navigation'
 import { FriendProfileSheet } from '@/components/friends/FriendProfileSheet'
 import { HangoutChat } from '@/components/hangout/HangoutChat'
 import { createClient } from '@/lib/supabase-client'
@@ -33,6 +33,7 @@ function FriendSkeleton() {
 export default function FriendsPage() {
   const { profile } = useAuth()
   const searchParams = useSearchParams()
+  const nextRouter = useNextRouter()
 
   const [friendships, setFriendships] = useState(
     () => getCache(friendsKey(_cachedProfileId))?.friendships ?? []
@@ -79,7 +80,7 @@ export default function FriendsPage() {
     const chatId = searchParams.get('chat')
     if (chatId) {
       setActiveTab('chats')
-      window.history.replaceState({}, '', '/friends?tab=chats')
+      nextRouter.replace('/friends')
       createClient()
         .from('hangout_posts')
         .select('id, title, date_time, creator_id, is_surprise, creator:profiles!creator_id(id, name, nickname, avatar_emoji)')
@@ -88,6 +89,12 @@ export default function FriendsPage() {
         .then(({ data }) => { if (data) { setActiveChatHangout(data); markChatRead(profile.id, chatId) } })
     }
   }, [profile?.id])
+
+  // ── Clear open chat when navigating to /friends with no ?chat= param ───────
+  // (App Router keeps this component mounted across navigations, so state persists)
+  useEffect(() => {
+    if (!searchParams.get('chat')) setActiveChatHangout(null)
+  }, [searchParams.get('chat')])
 
   // ── Load chats when switching to chats tab ────────────────────────────────
   useEffect(() => {
