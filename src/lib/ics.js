@@ -23,12 +23,21 @@ export function downloadICS(hangout) {
   const now = new Date()
 
   // Build notes field: attendees list + original description
-  const goingNames = (hangout.rsvps ?? [])
-    .filter(r => r.status === 'going')
-    .map(r => r.user?.name ?? r.user?.nickname ?? 'someone')
-  const attendeeLine = goingNames.length > 0 ? `going: ${goingNames.join(', ')}` : null
-  const parts = [attendeeLine, hangout.description].filter(Boolean)
-  const notes = parts.length > 0 ? parts.join('\\n\\n') : null
+  // Host is always attending — include them first
+  const hostName = hangout.creator?.name ?? hangout.creator?.nickname
+  const goingNames = [
+    ...(hostName ? [hostName] : []),
+    ...(hangout.rsvps ?? [])
+      .filter(r => r.status === 'going' && r.user_id !== hangout.creator_id)
+      .map(r => r.user?.name ?? r.user?.nickname ?? 'someone'),
+  ]
+  const attendeeLine = goingNames.length > 0
+    ? `Going (not up to date): ${goingNames.join(', ')}`
+    : null
+  const descLine = hangout.description ? `Notes: ${hangout.description}` : null
+  const parts = [attendeeLine, descLine].filter(Boolean)
+  // Use actual newline characters — escapeICS will convert them to \n for ICS format
+  const notes = parts.length > 0 ? parts.join('\n\n') : null
 
   const lines = [
     'BEGIN:VCALENDAR',

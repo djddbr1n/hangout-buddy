@@ -15,7 +15,8 @@ const vibeLabel = (n) => VIBE[n] ?? (n >= 8 ? 'full squad' : 'duo')
 
 // value = number (max people, including host)
 // onChange = (n: number) => void
-export function PeoplePicker({ value, onChange }) {
+// min = minimum allowed (default 2, floors at current headcount when editing)
+export function PeoplePicker({ value, onChange, min = 2 }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -34,9 +35,12 @@ export function PeoplePicker({ value, onChange }) {
         </motion.span>
       </div>
 
+      {min > 2 && (
+        <p className="text-[10px] text-amber-600 font-medium">min {min} — {min - 1} already going</p>
+      )}
       <input
         type="range"
-        min={2}
+        min={min}
         max={12}
         value={value}
         onChange={e => onChange(Number(e.target.value))}

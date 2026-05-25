@@ -10,10 +10,12 @@ const ACTIVITY_COLORS = {
 }
 
 export function HangoutCard({ hangout, currentUser, friendIds, onOpen, isInvited }) {
-  const goingCount = hangout.rsvps?.filter(r => r.status === 'going').length ?? 0
+  // Host is always going — count them + going RSVPs (excluding host if they somehow RSVPd)
+  const goingRsvps = hangout.rsvps?.filter(r => r.status === 'going' && r.user_id !== hangout.creator_id).length ?? 0
+  const goingCount = goingRsvps + 1
   const maybeCount = hangout.rsvps?.filter(r => r.status === 'maybe').length ?? 0
   const myRSVP = hangout.rsvps?.find(r => r.user_id === currentUser.id)
-  const spotsLeft = hangout.max_people - 1 - goingCount
+  const spotsLeft = hangout.max_people - goingCount
   const isMine = hangout.creator_id === currentUser.id
   const isFull = spotsLeft <= 0 && !myRSVP
   // invited cards get a distinct indigo-tinted header; others use activity color

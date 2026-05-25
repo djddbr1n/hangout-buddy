@@ -51,8 +51,10 @@ function MyEventsSection({ events, profile, onOpen }) {
               className="overflow-hidden"
             >
               {events.map((h, i) => {
-                const hosting   = h.creator_id === profile.id
-                const goingCount = h.rsvps?.filter(r => r.status === 'going').length ?? 0
+                const hosting    = h.creator_id === profile.id
+                // Host is always "going" — count them + any going RSVPs (excluding host if they somehow RSVPd)
+                const goingRsvps = h.rsvps?.filter(r => r.status === 'going' && r.user_id !== h.creator_id).length ?? 0
+                const goingCount = goingRsvps + 1
                 return (
                   <motion.button
                     key={h.id}
@@ -234,7 +236,7 @@ export default function DashboardPage() {
   const handleCreate = async (post) => {
     if (!profile) return
     const supabase = createClient()
-    const { data } = await supabase
+    const { data, error: createError } = await supabase
       .from('hangout_posts')
       .insert({
         creator_id: profile.id,
@@ -251,10 +253,11 @@ export default function DashboardPage() {
         is_surprise: post.is_surprise ?? false,
         surprise_options: post.surprise_options,
       })
-      .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji)')
+      .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
       .single()
+    if (!data) { console.error('create hangout failed — run migration: alter table hangout_posts add column if not exists allow_plus_ones boolean not null default false;'); return }
     if (data) {
-      setHangouts(prev => [{ ...data, rsvps: [] }, ...prev])
+      setHangouts(prev => [{ ...data }, ...prev])
       // notify friends about new hangout (fire-and-forget)
       const supabase2 = createClient()
       supabase2.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted')

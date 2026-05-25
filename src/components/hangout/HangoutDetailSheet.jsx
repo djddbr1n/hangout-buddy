@@ -41,10 +41,11 @@ export function HangoutDetailSheet({
 
   if (!hangout) return null
 
-  const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going') ?? []
+  const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going' && r.user_id !== hangout.creator_id) ?? []
   const maybeRSVPs = hangout.rsvps?.filter(r => r.status === 'maybe') ?? []
   const myRSVP     = hangout.rsvps?.find(r => r.user_id === currentUser.id)
   const isMine     = hangout.creator_id === currentUser.id
+  // host always counts as 1, so spots = max - host - going guests
   const spotsLeft  = hangout.max_people - 1 - goingRSVPs.length
   const isFull     = spotsLeft <= 0 && !myRSVP
 
@@ -165,12 +166,20 @@ export function HangoutDetailSheet({
 
               {/* ── attendee lists ── */}
               <div className="space-y-3">
-                {goingRSVPs.length > 0 && (
+                {(goingRSVPs.length > 0 || hangout.creator) && (
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Check size={11} className="text-emerald-500" /> going ({goingRSVPs.length})
+                      <Check size={11} className="text-emerald-500" /> going ({goingRSVPs.length + 1})
                     </p>
                     <div className="space-y-1.5">
+                      {/* Host is always first in the going list */}
+                      <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-amber-50">
+                        <span className="text-xl">{hangout.creator?.avatar_emoji ?? '👤'}</span>
+                        <span className="text-sm font-medium text-gray-800 flex-1">
+                          {isMine ? 'you' : (hangout.creator?.name ?? `@${hangout.creator?.nickname}`)}
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🏠 host</span>
+                      </div>
                       {goingRSVPs.map(rsvp => {
                         const isFriend = friendIds.includes(rsvp.user_id)
                         const isYou    = rsvp.user_id === currentUser.id

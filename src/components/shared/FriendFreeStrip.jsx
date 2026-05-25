@@ -58,7 +58,15 @@ export function FriendFreeStrip({ friendFreeBusy, friendProfiles, activeBlock, o
       .filter(Boolean),
   }))
 
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
   return (
+    <div>
+      {hasCal && (
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-0.5 mb-2">
+          friends free today · {todayLabel}
+        </p>
+      )}
     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
       {blocks.map(block => {
         const isActive = activeBlock === block.key
@@ -92,6 +100,7 @@ export function FriendFreeStrip({ friendFreeBusy, friendProfiles, activeBlock, o
           </motion.button>
         )
       })}
+    </div>
     </div>
   )
 }

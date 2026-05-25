@@ -8,6 +8,11 @@ import { SurpriseSpinner } from './SurpriseSpinner'
 
 export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdit, prefill }) {
   const isEdit = !!editHangout
+  // Can't reduce max below current headcount (host + going guests)
+  const currentHeadcount = isEdit
+    ? 1 + (editHangout?.rsvps?.filter(r => r.status === 'going' && r.user_id !== editHangout.creator_id).length ?? 0)
+    : 2
+  const minMaxPeople = Math.max(2, currentHeadcount)
 
   const DURATIONS = [
     { label: '30m',     value: 30  },
@@ -221,7 +226,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
               </AnimatePresence>
 
               <div className="bg-gray-50 rounded-2xl p-4">
-                <PeoplePicker value={maxPeople} onChange={setMaxPeople} />
+                <PeoplePicker value={maxPeople} onChange={setMaxPeople} min={minMaxPeople} />
               </div>
 
               {/* Allow attendees to invite friends */}
