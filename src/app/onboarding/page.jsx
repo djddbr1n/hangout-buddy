@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Smartphone, Bell, Share2, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -26,6 +27,8 @@ export default function OnboardingPage() {
   const [searchResults, setSearchResults] = useState([])
   const [addedFriends, setAddedFriends] = useState(new Set())
   const [saving, setSaving] = useState(false)
+  const [notifGranted, setNotifGranted]       = useState(false)
+  const [homescreenDone, setHomescreenDone]   = useState(false)
 
   function toggleCell(dayIndex, block) {
     const key = `${dayIndex}-${block}`
@@ -83,14 +86,18 @@ export default function OnboardingPage() {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-6">
-          <div className="text-4xl mb-2">{step === 'availability' ? '📅' : '👯'}</div>
+          <div className="text-4xl mb-2">
+            {step === 'availability' ? '📅' : step === 'friends' ? '👯' : '⚡'}
+          </div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {step === 'availability' ? 'when are you free?' : 'find your people'}
+            {step === 'availability' ? 'when are you free?' : step === 'friends' ? 'find your people' : "one last thing"}
           </h1>
           <p className="text-gray-400 text-sm mt-1">
             {step === 'availability'
               ? "tap the blocks when you're usually free"
-              : 'add friends to share hangouts with'}
+              : step === 'friends'
+              ? 'add friends to share hangouts with'
+              : 'get the full experience — takes 10 seconds'}
           </p>
         </div>
 
@@ -136,7 +143,7 @@ export default function OnboardingPage() {
                   {saving ? 'saving...' : 'looks good →'}
                 </motion.button>
               </motion.div>
-            ) : (
+            ) : step === 'friends' ? (
               <motion.div key="friends" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">@</span>
@@ -175,11 +182,95 @@ export default function OnboardingPage() {
 
                 <motion.button
                   whileTap={{ scale: 0.97 }}
+                  onClick={() => setStep('setup')}
+                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-pink-500 text-white font-semibold text-sm shadow-lg shadow-violet-100"
+                >
+                  {addedFriends.size > 0 ? 'next →' : 'skip for now →'}
+                </motion.button>
+              </motion.div>
+            ) : (
+              /* ── Setup step ── */
+              <motion.div key="setup" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
+
+                {/* Add to home screen card */}
+                <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-purple-50/40 p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-violet-500 flex items-center justify-center shrink-0 shadow-sm shadow-violet-200">
+                      <Smartphone size={18} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-900 text-sm">add to your home screen</p>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        Works like a real app — instant launch, no browser bar, full screen.
+                      </p>
+                    </div>
+                  </div>
+                  {/* iOS instructions */}
+                  <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500 bg-white/70 rounded-xl px-3 py-2 border border-violet-100/60 mb-3">
+                    <span>tap</span>
+                    <span className="inline-flex items-center gap-0.5 font-semibold bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-gray-700 shadow-sm">
+                      <Share2 size={9} /> share
+                    </span>
+                    <span>then</span>
+                    <span className="font-semibold text-gray-700 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 shadow-sm">"Add to Home Screen"</span>
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setHomescreenDone(true)}
+                    className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      homescreenDone
+                        ? 'bg-emerald-100 text-emerald-600'
+                        : 'bg-violet-500 text-white shadow-sm shadow-violet-200'
+                    }`}
+                  >
+                    {homescreenDone ? <><Check size={12} /> done!</> : "i'll add it now"}
+                  </motion.button>
+                </div>
+
+                {/* Notifications card */}
+                <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50/40 p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-400 flex items-center justify-center shrink-0 shadow-sm shadow-amber-200">
+                      <Bell size={18} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-900 text-sm">enable notifications</p>
+                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        Be first to know when friends post hangouts — these go fast.
+                      </p>
+                    </div>
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    disabled={notifGranted}
+                    onClick={async () => {
+                      try {
+                        const perm = await Notification.requestPermission()
+                        setNotifGranted(perm === 'granted')
+                      } catch { setNotifGranted(false) }
+                    }}
+                    className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      notifGranted
+                        ? 'bg-emerald-100 text-emerald-600'
+                        : 'bg-amber-400 text-white shadow-sm shadow-amber-200'
+                    }`}
+                  >
+                    {notifGranted ? <><Check size={12} /> enabled!</> : 'enable notifications'}
+                  </motion.button>
+                </div>
+
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => router.push('/dashboard')}
                   className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-pink-500 text-white font-semibold text-sm shadow-lg shadow-violet-100"
                 >
-                  {addedFriends.size > 0 ? "let's go 🎉" : 'skip for now →'}
+                  {notifGranted && homescreenDone ? "let's go 🎉" : "let's go →"}
                 </motion.button>
+                {(!notifGranted || !homescreenDone) && (
+                  <button onClick={() => router.push('/dashboard')} className="w-full text-xs text-gray-400 text-center py-1">
+                    skip setup
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -188,6 +279,7 @@ export default function OnboardingPage() {
         <div className="flex items-center justify-center gap-2 mt-5">
           <div className={`h-1.5 w-8 rounded-full transition-colors ${step === 'availability' ? 'bg-violet-400' : 'bg-gray-200'}`} />
           <div className={`h-1.5 w-8 rounded-full transition-colors ${step === 'friends' ? 'bg-violet-400' : 'bg-gray-200'}`} />
+          <div className={`h-1.5 w-8 rounded-full transition-colors ${step === 'setup' ? 'bg-violet-400' : 'bg-gray-200'}`} />
         </div>
       </motion.div>
     </div>

@@ -112,7 +112,40 @@ export async function getFriendFreeBusy(friendId) {
   return { connected: true, busy: data.calendars?.primary?.busy ?? [] }
 }
 
-export async function sendPushToUser(userId, title, body, url = '/notifications') {
+// Notify all hangout participants (host + going) except the sender about a new chat message
+export async function notifyChatParticipants(hangoutId, senderId, senderName, content) {
+  try {
+    const service = createServiceClient()
+    const { data: hangout } = await service
+      .from('hangout_posts')
+      .select('creator_id, title, rsvps(user_id, status)')
+      .eq('id', hangoutId)
+      .single()
+    if (!hangout) return { success: false }
+
+    const participants = new Set([hangout.creator_id])
+    for (const r of hangout.rsvps ?? []) {
+      if (r.status === 'going') participants.add(r.user_id)
+    }
+    participants.delete(senderId)
+
+    const preview = content.length > 80 ? content.slice(0, 77) + '…' : content
+    const url = `/friends?tab=chats&chat=${hangoutId}`
+
+    await Promise.allSettled(
+      [...participants].map(uid =>
+        sendPushToUser(uid, hangout.title, `${senderName}: ${preview}`, url)
+      )
+    )
+    return { success: true }
+  } catch (err) {
+    console.error('notifyChatParticipants error', err)
+    return { success: false }
+  }
+}
+
+// urgency: 'normal' (default) | 'high' (new hangout invites — breaks through Focus on iOS)
+export async function sendPushToUser(userId, title, body, url = '/notifications', urgency = 'normal') {
   if (!process.env.VAPID_PRIVATE_KEY) return { success: false, reason: 'no VAPID key' }
   try {
     const supabase = await createClient()
@@ -124,11 +157,13 @@ export async function sendPushToUser(userId, title, body, url = '/notifications'
     if (!subs || subs.length === 0) return { success: true, sent: 0 }
 
     const payload = JSON.stringify({ title, body, url, icon: '/icon-192.png' })
+    // urgency:'high' → TTL 1h (deliver now or not at all); maps to apns-priority:10 on iOS Safari
+    const pushOpts = { urgency, TTL: urgency === 'high' ? 3600 : 86400 }
 
     await Promise.allSettled(
       subs.map(async ({ endpoint, subscription }) => {
         try {
-          await webpush.sendNotification(subscription, payload)
+          await webpush.sendNotification(subscription, payload, pushOpts)
         } catch (err) {
           if (err.statusCode === 410 || err.statusCode === 404) {
             await supabase.from('push_subscriptions').delete()

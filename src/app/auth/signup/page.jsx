@@ -5,10 +5,14 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Shuffle, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 
-const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','🐙','🐧','🦜','🐺','🦔','🐝','🐮','🐻‍❄️','🦩']
+// One row of options shown on screen — roughly 6 fit on a 375px iOS screen
+const AVATAR_ROW = ['🦊','🐸','🐼','🦋','🦁','🐙']
+// Full pool used by "surprise me"
+const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','🐙','🐧','🦜','🐺','🦔','🐝','🐮','🐻‍❄️','🦩','🐳','🦈','🦚','🦥','🐲','🌸','⭐','🍀','🎸','🎨','🧸','🌊']
 
 export default function SignupPage() {
   const router = useRouter()
@@ -18,6 +22,12 @@ export default function SignupPage() {
   const [nickname, setNickname] = useState('')
   const [avatar, setAvatar] = useState('🦊')
   const [customMode, setCustomMode] = useState(false)
+
+  function surpriseMe() {
+    const pool = EMOJIS.filter(e => e !== avatar)
+    setAvatar(pool[Math.floor(Math.random() * pool.length)])
+    setCustomMode(false)
+  }
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -110,47 +120,84 @@ export default function SignupPage() {
               <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <p className="text-sm font-semibold text-gray-500">step 1 of 2 — your vibe</p>
 
-                {/* emoji picker */}
+                {/* avatar picker */}
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">pick your avatar</label>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {EMOJIS.map(e => (
+
+                  {/* Big preview */}
+                  <div className="flex justify-center mt-3 mb-3">
+                    <motion.div
+                      key={avatar}
+                      initial={{ scale: 0.7, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="w-16 h-16 rounded-2xl bg-violet-50 border-2 border-violet-200 flex items-center justify-center text-4xl shadow-sm"
+                    >
+                      {avatar}
+                    </motion.div>
+                  </div>
+
+                  {/* One row of quick-pick options */}
+                  <div className="flex gap-2 justify-between">
+                    {AVATAR_ROW.map(e => (
                       <motion.button
                         key={e}
                         whileTap={{ scale: 0.85 }}
                         onClick={() => { setAvatar(e); setCustomMode(false) }}
-                        className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${
-                          avatar === e && !customMode ? 'bg-violet-100 ring-2 ring-violet-400 scale-110' : 'bg-gray-50 hover:bg-gray-100'
+                        className={`flex-1 h-11 rounded-xl text-xl flex items-center justify-center transition-all ${
+                          avatar === e && !customMode
+                            ? 'bg-violet-100 ring-2 ring-violet-400'
+                            : 'bg-gray-50'
                         }`}
                       >
                         {e}
                       </motion.button>
                     ))}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-2">
                     <motion.button
-                      whileTap={{ scale: 0.85 }}
-                      onClick={() => setCustomMode(true)}
-                      className={`w-10 h-10 rounded-xl text-xs font-semibold flex items-center justify-center transition-all ${
-                        customMode ? 'bg-violet-100 ring-2 ring-violet-400' : 'bg-gray-50 hover:bg-gray-100 text-gray-400'
+                      whileTap={{ scale: 0.95 }}
+                      onClick={surpriseMe}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-50 text-violet-600 text-xs font-semibold border border-violet-100"
+                    >
+                      <Shuffle size={13} /> surprise me
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setCustomMode(v => !v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border ${
+                        customMode
+                          ? 'bg-violet-50 text-violet-600 border-violet-100'
+                          : 'bg-gray-50 text-gray-500 border-gray-100'
                       }`}
                     >
-                      ✏️
+                      <Pencil size={13} /> customize
                     </motion.button>
                   </div>
-                  {customMode && (
-                    <div className="mt-2">
-                      <input
-                        autoFocus
-                        maxLength={2}
-                        placeholder="type any emoji"
-                        className="w-full rounded-xl border border-violet-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-                        onChange={e => {
-                          const val = [...e.target.value].slice(-1).join('')
-                          if (val) setAvatar(val)
-                        }}
-                      />
-                      <p className="text-xs text-gray-400 mt-1">paste or type any emoji — preview: <span className="text-lg">{avatar}</span></p>
-                    </div>
-                  )}
+
+                  {/* Custom emoji input */}
+                  <AnimatePresence>
+                    {customMode && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <input
+                          autoFocus
+                          maxLength={2}
+                          placeholder="paste or type any emoji"
+                          className="w-full mt-2 rounded-xl border border-violet-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                          onChange={e => {
+                            const val = [...e.target.value].slice(-1).join('')
+                            if (val) setAvatar(val)
+                          }}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div>

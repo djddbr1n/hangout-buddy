@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Send } from 'lucide-react'
 import { format, isToday, isYesterday } from 'date-fns'
 import { createClient } from '@/lib/supabase-client'
+import { notifyChatParticipants } from '@/app/actions'
 
 function dateDivider(dateStr) {
   const d = new Date(dateStr)
@@ -20,7 +21,7 @@ function shouldShowDivider(msgs, idx) {
   return prev !== curr
 }
 
-export function HangoutChat({ hangoutId, currentUser }) {
+export function HangoutChat({ hangoutId, currentUser, hangoutTitle }) {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
@@ -57,7 +58,16 @@ export function HangoutChat({ hangoutId, currentUser }) {
             .eq('id', payload.new.id)
             .single()
           if (msg) setMessages(prev => {
-            // Avoid duplicates (in case optimistic update already added it)
+            // Replace optimistic placeholder from the same sender with same content
+            const optIdx = prev.findIndex(
+              m => m.id.startsWith('opt-') && m.user_id === msg.user_id && m.content === msg.content
+            )
+            if (optIdx !== -1) {
+              const updated = [...prev]
+              updated[optIdx] = msg
+              return updated
+            }
+            // Avoid real duplicate (e.g. re-subscription race)
             if (prev.some(m => m.id === msg.id)) return prev
             return [...prev, msg]
           })
@@ -90,6 +100,8 @@ export function HangoutChat({ hangoutId, currentUser }) {
     setMessages(prev => [...prev, optimistic])
 
     await supabase.from('messages').insert({ hangout_id: hangoutId, user_id: currentUser.id, content })
+    // Fire-and-forget: push notification to all other participants
+    notifyChatParticipants(hangoutId, currentUser.id, currentUser.name ?? currentUser.nickname, content).catch(() => {})
   }
 
   const handleKey = (e) => {
@@ -175,7 +187,8 @@ export function HangoutChat({ hangoutId, currentUser }) {
       </div>
 
       {/* Input */}
-      <div className="px-4 pb-4 pt-2 border-t border-gray-100 flex items-end gap-2 shrink-0">
+      {/* pb-20 clears the fixed BottomNav (~60px) + safe-area inset */}
+      <div className="px-4 pt-2 pb-20 border-t border-gray-100 flex items-end gap-2 shrink-0">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}

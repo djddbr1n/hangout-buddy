@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Bell, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Bell, ChevronDown, ChevronRight, CalendarDays, Users, Calendar, Home } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { HangoutCard } from '@/components/hangout/HangoutCard'
@@ -23,20 +23,20 @@ function MyEventsSection({ events, profile, onOpen }) {
 
   return (
     <div className="mb-1">
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-gray-50 rounded-2xl overflow-hidden">
         {/* header row — tap to collapse */}
         <button
           onClick={() => setExpanded(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 border-b border-gray-50"
+          className="w-full flex items-center justify-between px-5 py-3.5 border-b border-gray-100"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">my events</span>
-            <span className="text-[11px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-semibold leading-none">
+            <span className="text-xs font-bold text-violet-500 uppercase tracking-wide">my events</span>
+            <span className="text-[11px] bg-violet-500 text-white rounded-full px-1.5 py-0.5 font-semibold leading-none">
               {events.length}
             </span>
           </div>
           <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown size={14} className="text-gray-400" />
+            <ChevronDown size={14} className="text-violet-400" />
           </motion.div>
         </button>
 
@@ -60,8 +60,8 @@ function MyEventsSection({ events, profile, onOpen }) {
                     key={h.id}
                     whileTap={{ scale: 0.99 }}
                     onClick={() => onOpen(h)}
-                    className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-gray-50 ${
-                      i < events.length - 1 ? 'border-b border-gray-50' : ''
+                    className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors active:bg-gray-100 ${
+                      i < events.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                   >
                     <span className="text-2xl shrink-0">{h.creator?.avatar_emoji ?? '👤'}</span>
@@ -75,10 +75,10 @@ function MyEventsSection({ events, profile, onOpen }) {
                       {goingCount > 0 && (
                         <span className="text-[10px] text-gray-400">{goingCount} going</span>
                       )}
-                      <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
-                        hosting ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                      <span className={`text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1 ${
+                        hosting ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-700'
                       }`}>
-                        {hosting ? '🏠 host' : '✓ going'}
+                        {hosting ? <><Home size={9} /> host</> : '✓ going'}
                       </span>
                       <ChevronRight size={13} className="text-gray-300" />
                     </div>
@@ -132,8 +132,13 @@ export default function DashboardPage() {
   // ── Filters ───────────────────────────────────────────────────────────────
   const [activeTimeBlock, setActiveTimeBlock] = useState(null)
   const [filterFriendsGoing, setFilterFriendsGoing] = useState(false)
-  const [filterHasSpots, setFilterHasSpots] = useState(false)
+  const [filterDate, setFilterDate] = useState('')   // YYYY-MM-DD; exclusive with time blocks
   const [filterToday, setFilterToday] = useState(false)
+  const dateInputRef = useRef(null)
+
+  // Time block + date are exclusive — helper that clears the other
+  const handleTimeBlockClick = (block) => { setActiveTimeBlock(block); if (block) setFilterDate('') }
+  const handleDateChange = (val) => { setFilterDate(val); if (val) { setActiveTimeBlock(null); setFilterToday(false) } }
 
   useEffect(() => {
     if (!profile) return
@@ -270,10 +275,22 @@ export default function DashboardPage() {
               date_time: data.date_time,
               max_people: data.max_people,
             })
-            sendPushToUser(friend_id, notifTitle, notifBody, `/dashboard?hangout=${data.id}`).catch(() => {})
+            sendPushToUser(friend_id, notifTitle, notifBody, `/dashboard?hangout=${data.id}`, 'high').catch(() => {})
           }
         })
     }
+  }
+
+  const handleAddFriend = async (userId) => {
+    if (!profile) return
+    const supabase = createClient()
+    const { data: existing } = await supabase
+      .from('friendships').select('id')
+      .or(`and(user_id.eq.${profile.id},friend_id.eq.${userId}),and(user_id.eq.${userId},friend_id.eq.${profile.id})`)
+    if (existing?.length > 0) return
+    await supabase.from('friendships').insert({ user_id: profile.id, friend_id: userId, status: 'pending', auth_level: 'invite_only' })
+    await supabase.from('notifications').insert({ user_id: userId, type: 'friend_request', actor_id: profile.id, actor_name: profile.name })
+    sendPushToUser(userId, 'new friend request', `${profile.name} wants to be friends`).catch(() => {})
   }
 
   const handleInviteFriend = async (hangout, friendId) => {
@@ -358,26 +375,29 @@ export default function DashboardPage() {
   }
 
   function matchesFilters(h) {
+    const eventDate = new Date(h.date_time)
     if (activeTimeBlock) {
-      const hr = new Date(h.date_time).getHours()
+      // Time block = today only, within that hour window
+      if (eventDate.toDateString() !== new Date().toDateString()) return false
+      const hr = eventDate.getHours()
       const [min, max] = BLOCK_HOURS[activeTimeBlock]
       if (hr < min || hr >= max) return false
     }
+    if (filterDate) {
+      // Date picker: YYYY-MM-DD local compare
+      const localDate = `${eventDate.getFullYear()}-${String(eventDate.getMonth()+1).padStart(2,'0')}-${String(eventDate.getDate()).padStart(2,'0')}`
+      if (localDate !== filterDate) return false
+    }
     if (filterToday) {
-      const today = new Date().toDateString()
-      if (new Date(h.date_time).toDateString() !== today) return false
+      if (eventDate.toDateString() !== new Date().toDateString()) return false
     }
     if (filterFriendsGoing) {
       if (!h.rsvps?.some(r => friendIds.includes(r.user_id))) return false
     }
-    if (filterHasSpots) {
-      const going = h.rsvps?.filter(r => r.status === 'going').length ?? 0
-      if (h.max_people - 1 - going <= 0) return false
-    }
     return true
   }
 
-  const hasActiveFilter = activeTimeBlock || filterFriendsGoing || filterHasSpots || filterToday
+  const hasActiveFilter = activeTimeBlock || filterFriendsGoing || filterDate || filterToday
 
   // ── Quick-create prefill ──────────────────────────────────────────────────
   function generatePrefill(timeBlock) {
@@ -435,20 +455,26 @@ export default function DashboardPage() {
   if (!profile) return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="px-5 pt-14 pb-4">
-        <div className="flex items-center justify-between max-w-md mx-auto mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">what's up</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {hangouts.length > 0 ? `${hangouts.length} open hangout${hangouts.length === 1 ? '' : 's'}` : 'nothing yet'}
-            </p>
-          </div>
+    <div className="min-h-screen bg-white">
+      {/* ── Header + filters on a gradient background ── */}
+      <div className="bg-gradient-to-b from-violet-100 via-violet-50/60 to-white px-5 pt-12 pb-4">
+        {/* Top row: title + actions */}
+        <div className="max-w-md mx-auto flex items-center justify-between mb-4">
+          <h1 className="text-xl font-bold text-gray-900">
+            {(() => {
+              const h = new Date().getHours()
+              if (h < 10) return 'plans today?'
+              if (h < 14) return "who's free?"
+              if (h < 17) return 'afternoon plans?'
+              if (h < 20) return "what's the move?"
+              return 'still down for something?'
+            })()}
+          </h1>
           <div className="flex items-center gap-2">
-            <Link href="/notifications" className="relative w-10 h-10 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-              <Bell size={18} className="text-gray-500" />
+            <Link href="/notifications" className="relative w-9 h-9 rounded-xl bg-white/80 border border-white flex items-center justify-center shadow-sm">
+              <Bell size={16} className="text-gray-500" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4.5 h-4.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center min-w-[18px] px-1">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -456,52 +482,67 @@ export default function DashboardPage() {
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setSheetOpen(true)}
-              className="w-10 h-10 rounded-2xl bg-violet-500 flex items-center justify-center shadow-lg shadow-violet-200"
+              className="w-9 h-9 rounded-xl bg-violet-500 flex items-center justify-center shadow-md shadow-violet-200"
             >
-              <Plus size={20} className="text-white" strokeWidth={2.5} />
+              <Plus size={18} className="text-white" strokeWidth={2.5} />
             </motion.button>
           </div>
         </div>
+
+        {/* Time blocks (FriendFreeStrip) */}
         <div className="max-w-md mx-auto">
           <FriendFreeStrip
             friendFreeBusy={friendFreeBusy}
             friendProfiles={friendProfiles}
             activeBlock={activeTimeBlock}
-            onBlockClick={setActiveTimeBlock}
+            onBlockClick={handleTimeBlockClick}
             calLoading={calLoading}
           />
         </div>
-      </div>
 
-      {/* ── Filter chips bar ─────────────────────────────────────────────── */}
-      <div className="max-w-md mx-auto px-4 mb-1">
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {/* Social / status filters */}
-          {[
-            { key: 'today',        label: '📅 today',          active: filterToday,        toggle: () => setFilterToday(v => !v) },
-            { key: 'friends',      label: '👥 friends going',   active: filterFriendsGoing, toggle: () => setFilterFriendsGoing(v => !v) },
-            { key: 'spots',        label: '🟢 has spots',       active: filterHasSpots,     toggle: () => setFilterHasSpots(v => !v) },
-          ].map(f => (
-            <motion.button
-              key={f.key}
-              whileTap={{ scale: 0.94 }}
-              onClick={f.toggle}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-                f.active
-                  ? 'bg-violet-500 text-white shadow-sm shadow-violet-200'
-                  : 'bg-white text-gray-500 border border-gray-200'
-              }`}
-            >
-              {f.label}
-            </motion.button>
-          ))}
+        {/* Social + date filter chips */}
+        <div className="max-w-md mx-auto flex gap-2 overflow-x-auto pb-1 no-scrollbar mt-2">
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => { setFilterToday(v => !v); setFilterDate('') }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
+              filterToday ? 'bg-violet-500 text-white shadow-sm shadow-violet-200' : 'bg-white text-violet-400 border border-violet-100'
+            }`}
+          >
+            <CalendarDays size={11} /> today
+          </motion.button>
 
-          {/* Clear all */}
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => setFilterFriendsGoing(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
+              filterFriendsGoing ? 'bg-violet-500 text-white shadow-sm shadow-violet-200' : 'bg-white text-violet-400 border border-violet-100'
+            }`}
+          >
+            <Users size={11} /> friends going
+          </motion.button>
+
+          {/* Date picker — label+input is the only reliable way to open native picker on iOS */}
+          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            filterDate ? 'bg-violet-500 text-white shadow-sm shadow-violet-200' : 'bg-white text-violet-400 border border-violet-100'
+          }`}>
+            <Calendar size={11} />
+            {filterDate
+              ? new Date(filterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : 'pick date'}
+            <input
+              type="date"
+              value={filterDate}
+              onChange={e => handleDateChange(e.target.value)}
+              className="sr-only"
+            />
+          </label>
+
           {hasActiveFilter && (
             <motion.button
               whileTap={{ scale: 0.94 }}
-              onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterHasSpots(false); setFilterToday(false) }}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold text-gray-400 border border-dashed border-gray-300 whitespace-nowrap"
+              onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterDate(''); setFilterToday(false) }}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold text-gray-400 bg-white/80 border border-white shadow-sm whitespace-nowrap shrink-0"
             >
               clear
             </motion.button>
@@ -509,7 +550,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 pb-32">
+      <div className="max-w-md mx-auto px-4 pb-28">
         {(() => {
           const now = new Date()
           const hangoutEndTime = h => new Date(new Date(h.date_time).getTime() + (h.duration_minutes ?? 120) * 60_000)
@@ -519,9 +560,14 @@ export default function DashboardPage() {
             h.rsvps?.some(r => r.user_id === profile.id && r.status === 'going')
           )
           const myEventIds = new Set(myEvents.map(h => h.id))
-          // Apply filters only to the feed (my events always visible)
+          // Feed: exclude my events, auto-hide full hangouts, apply active filters
           const feedHangouts = upcomingHangouts
             .filter(h => !myEventIds.has(h.id))
+            .filter(h => {
+              // Auto-exclude hangouts with no spots remaining
+              const going = h.rsvps?.filter(r => r.status === 'going' && r.user_id !== h.creator_id).length ?? 0
+              return h.max_people - 1 - going > 0
+            })
             .filter(matchesFilters)
 
           return (
@@ -543,13 +589,13 @@ export default function DashboardPage() {
                     onClick={openQuickCreate}
                     className="mt-4 px-4 py-2 rounded-2xl bg-violet-500 text-white text-sm font-semibold shadow-sm shadow-violet-200"
                   >
-                    start one ✨
+                    start one
                   </motion.button>
                 </div>
               ) : (
                 <div>
                   <div className="flex items-center justify-between px-1 mb-3">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+                    <p className="text-xs font-bold text-violet-400 uppercase tracking-wide">
                       all hangouts
                     </p>
                     {hasActiveFilter && (
@@ -560,12 +606,12 @@ export default function DashboardPage() {
                   </div>
 
                   {feedHangouts.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+                    <div className="text-center py-12 bg-gray-50 rounded-2xl">
                       <p className="text-2xl mb-2">🔍</p>
                       <p className="font-semibold text-gray-500 text-sm">no hangouts match</p>
                       <div className="flex items-center justify-center gap-3 mt-3">
                         <button
-                          onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterHasSpots(false); setFilterToday(false) }}
+                          onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterDate(''); setFilterToday(false) }}
                           className="text-xs text-gray-400 font-medium"
                         >
                           clear filters
@@ -576,7 +622,7 @@ export default function DashboardPage() {
                           onClick={openQuickCreate}
                           className="text-xs text-violet-500 font-semibold"
                         >
-                          start one ✨
+                          start one
                         </motion.button>
                       </div>
                     </div>
@@ -621,6 +667,7 @@ export default function DashboardPage() {
         onEdit={h => { setDetailHangout(null); setEditHangout(h) }}
         onDelete={handleDelete}
         onInviteFriend={handleInviteFriend}
+        onAddFriend={handleAddFriend}
       />
     </div>
   )

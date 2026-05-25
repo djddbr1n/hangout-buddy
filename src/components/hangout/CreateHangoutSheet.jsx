@@ -102,7 +102,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             drag="y" dragConstraints={{ top: 0 }} dragElastic={{ top: 0, bottom: 0.3 }}
             onDragEnd={(_, { offset, velocity }) => { if (offset.y > 80 || velocity.y > 500) onClose() }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[92vh] flex flex-col"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden"
           >
             {/* ── handle — this is the drag target ── */}
             <div className="flex justify-center pt-3 pb-1 shrink-0">

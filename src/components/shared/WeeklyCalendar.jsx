@@ -3,10 +3,10 @@
 import { format, startOfWeek, addDays } from 'date-fns'
 
 const START_HOUR  = 7    // 7 am
-const END_HOUR    = 22   // 10 pm
+const END_HOUR    = 24   // 12 am (midnight)
 const HOUR_H      = 20   // px per hour
-const TOTAL_H     = (END_HOUR - START_HOUR) * HOUR_H   // 300px
-const TIME_TICKS  = [7, 10, 13, 16, 19, 22]            // labels every 3 h
+const TOTAL_H     = (END_HOUR - START_HOUR) * HOUR_H   // 340px
+const TIME_TICKS  = [7, 10, 13, 16, 19, 22, 24]        // labels every 3 h
 
 function getWeekDays() {
   const monday = startOfWeek(new Date(), { weekStartsOn: 1 })

@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle, Pencil, CalendarPlus, Trash2, UserPlus, MessageCircle, LayoutList } from 'lucide-react'
+import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle, Pencil, CalendarPlus, Trash2, UserPlus, MessageCircle } from 'lucide-react'
 import { format } from 'date-fns'
+import { useRouter } from 'next/navigation'
 import { RSVPButtons } from './RSVPButtons'
 import { SurpriseSpinner } from './SurpriseSpinner'
 import { downloadICS } from '@/lib/ics'
-import { HangoutChat } from './HangoutChat'
 
 // Returns 'free' | 'busy' | null (null = no GCal data)
 function availDuring(busySlots, hangout) {
@@ -34,12 +34,13 @@ function AvailTag({ status }) {
 
 export function HangoutDetailSheet({
   hangout, open, currentUser, friendIds, friendProfiles, friendFreeBusy,
-  onClose, onRSVP, onEdit, onDelete, onInviteFriend, isPast,
+  onClose, onRSVP, onEdit, onDelete, onInviteFriend, onAddFriend, isPast,
 }) {
-  const [confirmDelete, setConfirmDelete]   = useState(false)
+  const router = useRouter()
+  const [confirmDelete, setConfirmDelete]     = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
-  const [invitedIds, setInvitedIds]         = useState(new Set())
-  const [tab, setTab]                       = useState('details')
+  const [invitedIds, setInvitedIds]           = useState(new Set())
+  const [sentRequestIds, setSentRequestIds]   = useState(new Set())
 
   if (!hangout) return null
 
@@ -55,7 +56,7 @@ export function HangoutDetailSheet({
     setConfirmDelete(false)
     setShowInvitePanel(false)
     setInvitedIds(new Set())
-    setTab('details')
+    setSentRequestIds(new Set())
     onClose()
   }
 
@@ -77,7 +78,7 @@ export function HangoutDetailSheet({
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             drag="y" dragConstraints={{ top: 0 }} dragElastic={{ top: 0, bottom: 0.3 }}
             onDragEnd={(_, { offset, velocity }) => { if (offset.y > 80 || velocity.y > 500) closeAll() }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[90vh] flex flex-col"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[90vh] flex flex-col overflow-x-hidden"
           >
             {/* handle — drag target only */}
             <div className="flex justify-center pt-3 pb-0 shrink-0">
@@ -119,39 +120,6 @@ export function HangoutDetailSheet({
               </div>
             </div>
 
-            {/* ── tab switcher ── */}
-            <div className="flex gap-1 px-5 pt-3 pb-1 shrink-0">
-              <button
-                onClick={() => setTab('details')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                  tab === 'details'
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                <LayoutList size={14} />
-                details
-              </button>
-              <button
-                onClick={() => setTab('chat')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                  tab === 'chat'
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                <MessageCircle size={14} />
-                chat
-              </button>
-            </div>
-
-            {/* ── chat tab ── */}
-            {tab === 'chat' && (
-              <HangoutChat hangoutId={hangout.id} currentUser={currentUser} />
-            )}
-
-            {/* ── details tab ── */}
-            {tab === 'details' && (
             <div className="overflow-y-auto flex-1" onPointerDownCapture={e => e.stopPropagation()}>
             <div className="px-5 py-4 space-y-5 pb-10">
 
@@ -215,6 +183,16 @@ export function HangoutDetailSheet({
                           {isMine ? 'you' : (hangout.creator?.name ?? `@${hangout.creator?.nickname}`)}
                         </span>
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🏠 host</span>
+                        {!isMine && !friendIds.includes(hangout.creator_id) && onAddFriend && (
+                          <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            disabled={sentRequestIds.has(hangout.creator_id)}
+                            onClick={() => { onAddFriend(hangout.creator_id); setSentRequestIds(p => new Set([...p, hangout.creator_id])) }}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 transition-colors ${sentRequestIds.has(hangout.creator_id) ? 'bg-emerald-100 text-emerald-600' : 'bg-violet-500 text-white'}`}
+                          >
+                            {sentRequestIds.has(hangout.creator_id) ? '✓ sent' : '+ add'}
+                          </motion.button>
+                        )}
                       </div>
                       {goingRSVPs.map(rsvp => {
                         const isFriend = friendIds.includes(rsvp.user_id)
@@ -234,6 +212,16 @@ export function HangoutDetailSheet({
                             <AvailTag status={avail} />
                             {isFriend && !isYou && !avail && (
                               <span className="text-[10px] text-violet-500 font-semibold bg-violet-100 px-2 py-0.5 rounded-full">friend</span>
+                            )}
+                            {!isFriend && !isYou && onAddFriend && (
+                              <motion.button
+                                whileTap={{ scale: 0.9 }}
+                                disabled={sentRequestIds.has(rsvp.user_id)}
+                                onClick={() => { onAddFriend(rsvp.user_id); setSentRequestIds(p => new Set([...p, rsvp.user_id])) }}
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 transition-colors ${sentRequestIds.has(rsvp.user_id) ? 'bg-emerald-100 text-emerald-600' : 'bg-violet-500 text-white'}`}
+                              >
+                                {sentRequestIds.has(rsvp.user_id) ? '✓ sent' : '+ add'}
+                              </motion.button>
                             )}
                           </div>
                         )
@@ -259,6 +247,16 @@ export function HangoutDetailSheet({
                               {isYou ? 'you (maybe)' : rsvp.user?.name ?? `@${rsvp.user?.nickname}`}
                             </span>
                             <AvailTag status={avail} />
+                            {!isFriend && !isYou && onAddFriend && (
+                              <motion.button
+                                whileTap={{ scale: 0.9 }}
+                                disabled={sentRequestIds.has(rsvp.user_id)}
+                                onClick={() => { onAddFriend(rsvp.user_id); setSentRequestIds(p => new Set([...p, rsvp.user_id])) }}
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 transition-colors ${sentRequestIds.has(rsvp.user_id) ? 'bg-emerald-100 text-emerald-600' : 'bg-violet-500 text-white'}`}
+                              >
+                                {sentRequestIds.has(rsvp.user_id) ? '✓ sent' : '+ add'}
+                              </motion.button>
+                            )}
                           </div>
                         )
                       })}
@@ -405,16 +403,27 @@ export function HangoutDetailSheet({
                 </div>
               )}
 
-              {/* ── Add to calendar ── */}
-              {!isPast && (isMine || myRSVP?.status === 'going') && (
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => downloadICS(hangout)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-sm font-medium hover:border-violet-300 hover:text-violet-500 transition-colors"
-                >
-                  <CalendarPlus size={15} />
-                  add to your calendar
-                </motion.button>
+              {/* ── Group chat + calendar (host or going) ── */}
+              {(isMine || myRSVP?.status === 'going') && (
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => { closeAll(); router.push(`/friends?tab=chats&chat=${hangout.id}`) }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-violet-50 text-violet-600 text-sm font-semibold"
+                  >
+                    <MessageCircle size={15} />
+                    group chat
+                  </motion.button>
+                  {!isPast && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => downloadICS(hangout)}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-sm font-medium"
+                    >
+                      <CalendarPlus size={15} />
+                    </motion.button>
+                  )}
+                </div>
               )}
 
               {/* ── Past event ── */}
@@ -426,7 +435,6 @@ export function HangoutDetailSheet({
               )}
             </div>
             </div>
-            )}
           </motion.div>
         </>
       )}

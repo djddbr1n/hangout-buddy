@@ -13,6 +13,47 @@ body {
   font-family: 'Outfit', system-ui, -apple-system, sans-serif;
 }
 
+/* ── Prevent horizontal scroll & bounce on the page ────────────────────── */
+html, body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+/* ── iOS: prevent auto-zoom when focusing inputs (triggers when < 16px) ── */
+/* Keeps visual layout intact — just stops Safari from zooming in          */
+input:not([type="range"]),
+textarea,
+select {
+  font-size: 16px !important;
+}
+
+/* ── Remove the blue/grey tap flash on every touch ─────────────────────── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Buttons & links: remove 300ms tap delay, prevent text selection ───── */
+button, a {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Momentum scrolling on iOS for all overflow-y-auto containers ───────── */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Hide scrollbars while keeping scroll functional ───────────────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Range input styling ────────────────────────────────────────────────── */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;

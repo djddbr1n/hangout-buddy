@@ -62,11 +62,9 @@ export function FriendFreeStrip({ friendFreeBusy, friendProfiles, activeBlock, o
 
   return (
     <div>
-      {hasCal && (
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-0.5 mb-2">
-          friends free today · {todayLabel}
-        </p>
-      )}
+    <p className="text-[11px] font-semibold text-violet-400 uppercase tracking-wide mb-2">
+      friends free today · {todayLabel}
+    </p>
     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
       {blocks.map(block => {
         const isActive = activeBlock === block.key
