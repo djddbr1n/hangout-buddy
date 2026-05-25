@@ -12,11 +12,13 @@ export default function RootLayout({ children }) {
     <html lang="en" className="h-full">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+        {/* Match the dashboard gradient top — makes iOS status bar blend seamlessly */}
+        <meta name="theme-color" content="#ede9fe" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-full bg-gray-50 antialiased">
+      <body className="min-h-full bg-violet-100 antialiased">
         {children}
         <BottomNav />
         <SWUpdateWatcher />

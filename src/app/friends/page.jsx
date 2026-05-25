@@ -44,7 +44,7 @@ export default function FriendsPage() {
     () => getCache(friendsKey(_cachedProfileId))?.reverseAuthLevels ?? {}
   )
 
-  const [activeTab, setActiveTab]           = useState(() => searchParams.get('tab') === 'chats' ? 'chats' : 'friends')
+  const [activeTab, setActiveTab]           = useState(() => searchParams.get('tab') === 'friends' ? 'friends' : 'chats')
   const [activeChatHangout, setActiveChatHangout] = useState(null)
   const [chatHangouts, setChatHangouts]     = useState([])
   const [lastMessages, setLastMessages]     = useState({})
@@ -368,11 +368,14 @@ export default function FriendsPage() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">
-                {activeTab === 'friends' ? 'friends' : 'chats'}
-                {activeTab === 'friends' && pendingRequests.length > 0 && (
-                  <span className="ml-2 text-xs bg-violet-500 text-white rounded-full px-1.5 py-0.5 font-semibold">{pendingRequests.length}</span>
-                )}
+                {activeTab === 'chats' ? 'chats' : 'friends'}
               </h1>
+              {activeTab === 'chats' && unreadChatIds.size > 0 && (
+                <span className="text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5 font-semibold">{unreadChatIds.size}</span>
+              )}
+              {activeTab === 'friends' && pendingRequests.length > 0 && (
+                <span className="text-xs bg-violet-500 text-white rounded-full px-1.5 py-0.5 font-semibold">{pendingRequests.length}</span>
+              )}
             </div>
             {activeTab === 'friends' && (
               <motion.button
@@ -388,19 +391,22 @@ export default function FriendsPage() {
           {/* Tab switcher */}
           <div className="flex gap-1 mb-3">
             <button
-              onClick={() => setActiveTab('friends')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'friends' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
-            >
-              friends
-            </button>
-            <button
               onClick={() => { setActiveTab('chats'); if (chatHangouts.length === 0) loadChats() }}
               className={`relative flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'chats' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
             >
               <MessageCircle size={13} />
               chats
-              {unreadChatIds.size > 0 && (
+              {unreadChatIds.size > 0 && activeTab !== 'chats' && (
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('friends')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'friends' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
+            >
+              friends
+              {pendingRequests.length > 0 && activeTab !== 'friends' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
               )}
             </button>
           </div>

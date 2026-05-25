@@ -6,6 +6,12 @@ import { useState, useEffect } from 'react'
 import { PeoplePicker } from './PeoplePicker'
 import { SurpriseSpinner } from './SurpriseSpinner'
 
+// datetime-local inputs require LOCAL time strings, not UTC ISO strings
+function toLocalInputStr(d) {
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdit, prefill }) {
   const isEdit = !!editHangout
   // Can't reduce max below current headcount (host + going guests)
@@ -34,12 +40,30 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
   const [isSurprise, setIsSurprise] = useState(false)
   const [selectedSurprise, setSelectedSurprise] = useState()
 
+  // Lock background page scroll while sheet is open (iOS-safe: needs position:fixed)
+  useEffect(() => {
+    if (open) {
+      const y = window.scrollY
+      document.body.dataset.scrollLockY = String(y)
+      document.body.style.top = `-${y}px`
+      document.body.classList.add('scroll-locked')
+    } else {
+      document.body.classList.remove('scroll-locked')
+      document.body.style.top = ''
+      window.scrollTo(0, parseInt(document.body.dataset.scrollLockY ?? '0'))
+    }
+    return () => {
+      document.body.classList.remove('scroll-locked')
+      document.body.style.top = ''
+    }
+  }, [open])
+
   useEffect(() => {
     if (editHangout) {
       setTitle(editHangout.title ?? '')
       setDescription(editHangout.description ?? '')
       setLocation(editHangout.location ?? '')
-      setDateTime(editHangout.date_time ? new Date(editHangout.date_time).toISOString().slice(0, 16) : '')
+      setDateTime(editHangout.date_time ? toLocalInputStr(new Date(editHangout.date_time)) : '')
       setDuration(editHangout.duration_minutes ?? 120)
       setIsSurprise(editHangout.is_surprise ?? false)
       setMaxPeople(editHangout.max_people ?? 4)
@@ -100,18 +124,23 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            drag="y" dragConstraints={{ top: 0 }} dragElastic={{ top: 0, bottom: 0.3 }}
+            drag="y"
+            dragConstraints={{ top: 0, left: 0, right: 0 }}
+            dragElastic={{ top: 0, bottom: 0.3 }}
+            dragMomentum={false}
             onDragEnd={(_, { offset, velocity }) => { if (offset.y > 80 || velocity.y > 500) onClose() }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[92vh] flex flex-col overflow-hidden"
+            style={{ touchAction: 'none', x: 0 }}
           >
-            {/* ── handle — this is the drag target ── */}
-            <div className="flex justify-center pt-3 pb-1 shrink-0">
+            {/* ── handle — only this area allows drag-to-dismiss ── */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0 cursor-grab active:cursor-grabbing">
               <div className="w-10 h-1 rounded-full bg-gray-200" />
             </div>
 
-            {/* ── scrollable content — stops drag from stealing scroll ── */}
+            {/* ── scrollable content — captures pointer so drag doesn't fire ── */}
             <div
-              className="overflow-y-auto flex-1"
+              className="overflow-y-auto overflow-x-hidden flex-1"
+              style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
               onPointerDownCapture={e => e.stopPropagation()}
             >
             <div className="px-5 pb-8 space-y-5">

@@ -455,7 +455,7 @@ export default function DashboardPage() {
   if (!profile) return null
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-violet-100">
       {/* ── Header + filters on a gradient background ── */}
       <div className="bg-gradient-to-b from-violet-100 via-violet-50/60 to-white px-5 pt-12 pb-4">
         {/* Top row: title + actions */}
@@ -550,6 +550,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="bg-white">
       <div className="max-w-md mx-auto px-4 pb-28">
         {(() => {
           const now = new Date()
@@ -651,6 +652,7 @@ export default function DashboardPage() {
             </div>
           )
         })()}
+      </div>
       </div>
 
       <CreateHangoutSheet open={sheetOpen} onClose={() => { setSheetOpen(false); setPrefillData(null) }} onCreate={handleCreate} prefill={prefillData} />

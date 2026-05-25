@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, MapPin, Clock, Users, Sparkles, Check, HelpCircle, Pencil, CalendarPlus, Trash2, UserPlus, MessageCircle } from 'lucide-react'
 import { format } from 'date-fns'
@@ -52,6 +52,23 @@ export function HangoutDetailSheet({
   const spotsLeft  = hangout.max_people - 1 - goingRSVPs.length
   const isFull     = spotsLeft <= 0 && !myRSVP
 
+  useEffect(() => {
+    if (open) {
+      const y = window.scrollY
+      document.body.dataset.scrollLockY = String(y)
+      document.body.style.top = `-${y}px`
+      document.body.classList.add('scroll-locked')
+    } else {
+      document.body.classList.remove('scroll-locked')
+      document.body.style.top = ''
+      window.scrollTo(0, parseInt(document.body.dataset.scrollLockY ?? '0'))
+    }
+    return () => {
+      document.body.classList.remove('scroll-locked')
+      document.body.style.top = ''
+    }
+  }, [open])
+
   const closeAll = () => {
     setConfirmDelete(false)
     setShowInvitePanel(false)
@@ -76,9 +93,13 @@ export function HangoutDetailSheet({
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            drag="y" dragConstraints={{ top: 0 }} dragElastic={{ top: 0, bottom: 0.3 }}
+            drag="y"
+            dragConstraints={{ top: 0, left: 0, right: 0 }}
+            dragElastic={{ top: 0, bottom: 0.3 }}
+            dragMomentum={false}
             onDragEnd={(_, { offset, velocity }) => { if (offset.y > 80 || velocity.y > 500) closeAll() }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[90vh] flex flex-col overflow-x-hidden"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[90vh] flex flex-col overflow-hidden"
+            style={{ touchAction: 'none', x: 0 }}
           >
             {/* handle — drag target only */}
             <div className="flex justify-center pt-3 pb-0 shrink-0">
@@ -120,7 +141,11 @@ export function HangoutDetailSheet({
               </div>
             </div>
 
-            <div className="overflow-y-auto flex-1" onPointerDownCapture={e => e.stopPropagation()}>
+            <div
+              className="overflow-y-auto overflow-x-hidden flex-1"
+              style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+              onPointerDownCapture={e => e.stopPropagation()}
+            >
             <div className="px-5 py-4 space-y-5 pb-10">
 
               {/* ── meta chips ── */}

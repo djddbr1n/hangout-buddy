@@ -148,7 +148,8 @@ export async function notifyChatParticipants(hangoutId, senderId, senderName, co
 export async function sendPushToUser(userId, title, body, url = '/notifications', urgency = 'normal') {
   if (!process.env.VAPID_PRIVATE_KEY) return { success: false, reason: 'no VAPID key' }
   try {
-    const supabase = await createClient()
+    // Must use service client — regular client is RLS-bound and can't read other users' subscriptions
+    const supabase = createServiceClient()
     const { data: subs } = await supabase
       .from('push_subscriptions')
       .select('endpoint, subscription')
