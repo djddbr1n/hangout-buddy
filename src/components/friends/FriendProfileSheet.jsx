@@ -1,46 +1,32 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Lock, Plus, Eye, Shield } from 'lucide-react'
+import { getFriendFreeBusy } from '@/app/actions'
+import { WeeklyCalendar } from '@/components/shared/WeeklyCalendar'
 
-const DAYS = [
-  { label: 'Monday', short: 'Mon' },
-  { label: 'Tuesday', short: 'Tue' },
-  { label: 'Wednesday', short: 'Wed' },
-  { label: 'Thursday', short: 'Thu' },
-  { label: 'Friday', short: 'Fri' },
-  { label: 'Saturday', short: 'Sat' },
-  { label: 'Sunday', short: 'Sun' },
-]
+export function FriendProfileSheet({ friend, canSeeAvailability, myGrantLevel, open, onClose, onInvite, onAuthLevelChange }) {
+  const [busySlots, setBusySlots] = useState(null)
+  const [calLoading, setCalLoading] = useState(false)
+  const [calConnected, setCalConnected] = useState(null)
 
-const BLOCKS = [
-  { key: 'early_morning', label: 'Early',     time: 'before 10am', emoji: '🌅' },
-  { key: 'brunch',        label: 'Brunch',    time: '10am – 2pm',  emoji: '☕' },
-  { key: 'afternoon',     label: 'Afternoon', time: '2pm – 5pm',   emoji: '🌤' },
-  { key: 'dinner',        label: 'Dinner',    time: '5pm – 8pm',   emoji: '🌆' },
-  { key: 'late_night',    label: 'Late',      time: 'after 8pm',   emoji: '🌙' },
-]
+  // Fetch live free/busy whenever this sheet opens (and permission is granted)
+  useEffect(() => {
+    if (!open || !canSeeAvailability || !friend) return
+    setCalLoading(true)
+    setBusySlots(null)
+    setCalConnected(null)
+    getFriendFreeBusy(friend.id)
+      .then(result => {
+        setCalConnected(result.connected)
+        setBusySlots(result.busy ?? [])
+      })
+      .catch(() => setCalConnected(false))
+      .finally(() => setCalLoading(false))
+  }, [open, friend?.id, canSeeAvailability])
 
-function AvailabilityCell({ value }) {
-  if (value === true)
-    return (
-      <div className="w-full h-full rounded-lg bg-emerald-100 flex items-center justify-center">
-        <div className="w-2 h-2 rounded-full bg-emerald-400" />
-      </div>
-    )
-  if (value === false)
-    return <div className="w-full h-full rounded-lg bg-gray-100" />
-  return <div className="w-full h-full rounded-lg border border-dashed border-gray-200" />
-}
-
-
-export function FriendProfileSheet({ friend, availability, canSeeAvailability, myGrantLevel, open, onClose, onInvite, onAuthLevelChange }) {
   if (!friend) return null
-
-  // count free blocks this week
-  const freeCount = availability
-    ? Object.values(availability).flatMap(d => Object.values(d ?? {})).filter(Boolean).length
-    : 0
 
   return (
     <AnimatePresence>
@@ -56,7 +42,6 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, m
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[88vh] overflow-y-auto"
           >
-            {/* handle */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-gray-200" />
             </div>
@@ -121,24 +106,17 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, m
                     <div className="flex items-center gap-2 mb-1">
                       <Eye size={14} className={myGrantLevel === 'can_see_availability' ? 'text-violet-500' : 'text-gray-400'} />
                       <span className={`text-sm font-semibold ${myGrantLevel === 'can_see_availability' ? 'text-violet-700' : 'text-gray-500'}`}>
-                        see availability
+                        see calendar
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-400 leading-snug">they can see your free slots each week</p>
+                    <p className="text-[11px] text-gray-400 leading-snug">they can see your Google Calendar free/busy</p>
                   </motion.button>
                 </div>
               </div>
 
               {/* availability section */}
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-800">availability this week</h3>
-                  {canSeeAvailability && availability && (
-                    <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">
-                      {freeCount} free slots
-                    </span>
-                  )}
-                </div>
+                <h3 className="font-semibold text-gray-800 mb-3">availability this week</h3>
 
                 {!canSeeAvailability ? (
                   <div className="flex flex-col items-center py-8 gap-3 bg-gray-50 rounded-2xl">
@@ -146,58 +124,16 @@ export function FriendProfileSheet({ friend, availability, canSeeAvailability, m
                       <Lock size={18} className="text-gray-400" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium text-gray-600">availability hidden</p>
+                      <p className="text-sm font-medium text-gray-600">calendar hidden</p>
                       <p className="text-xs text-gray-400 mt-1">@{friend.nickname} hasn't shared their calendar with you</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {/* day headers */}
-                    <div className="grid gap-1" style={{ gridTemplateColumns: '68px repeat(7, 1fr)' }}>
-                      <div />
-                      {DAYS.map(d => (
-                        <div key={d.short} className="text-center text-[10px] font-semibold text-gray-400 pb-1">{d.short}</div>
-                      ))}
-                    </div>
-
-                    {/* block rows */}
-                    {BLOCKS.map(block => (
-                      <div key={block.key} className="grid gap-1 items-center" style={{ gridTemplateColumns: '68px repeat(7, 1fr)' }}>
-                        {/* label */}
-                        <div className="flex items-center gap-1.5 pr-1">
-                          <span className="text-base leading-none">{block.emoji}</span>
-                          <div>
-                            <p className="text-[11px] font-semibold text-gray-600 leading-none">{block.label}</p>
-                            <p className="text-[9px] text-gray-400 leading-none mt-0.5">{block.time}</p>
-                          </div>
-                        </div>
-                        {/* cells */}
-                        {DAYS.map((_, dayIdx) => (
-                          <div key={dayIdx} className="h-8">
-                            <AvailabilityCell
-                              value={availability?.[dayIdx]?.[block.key]}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-
-                    {/* legend */}
-                    <div className="flex items-center gap-4 pt-2 justify-center">
-                      {[
-                        { color: 'bg-emerald-100', dot: 'bg-emerald-400', label: 'free' },
-                        { color: 'bg-gray-100', dot: null, label: 'busy' },
-                        { color: 'border border-dashed border-gray-200', dot: null, label: 'unknown' },
-                      ].map(({ color, dot, label }) => (
-                        <div key={label} className="flex items-center gap-1.5">
-                          <div className={`w-4 h-4 rounded ${color} flex items-center justify-center`}>
-                            {dot && <div className={`w-1.5 h-1.5 rounded-full ${dot}`} />}
-                          </div>
-                          <span className="text-[11px] text-gray-400">{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <WeeklyCalendar
+                    busy={busySlots}
+                    loading={calLoading}
+                    notConnected={calConnected === false}
+                  />
                 )}
               </div>
             </div>

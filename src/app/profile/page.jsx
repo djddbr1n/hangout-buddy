@@ -4,13 +4,14 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, Settings, X, Bell, BellOff, Smartphone, ChevronDown, Archive, ChevronRight } from 'lucide-react'
+import { LogOut, Settings, X, Bell, BellOff, Smartphone, ChevronDown, Archive, ChevronRight, CalendarDays, CheckCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { usePush } from '@/hooks/usePush'
 import { HangoutDetailSheet } from '@/components/hangout/HangoutDetailSheet'
+import { disconnectGoogle } from '@/app/actions'
 
 function PastHangoutCard({ hangout, profileId, onOpen }) {
   const isHost    = hangout.creator_id === profileId
@@ -46,23 +47,13 @@ function PastHangoutCard({ hangout, profileId, onOpen }) {
   )
 }
 
-const TIME_BLOCKS = [
-  { key: 'early_morning', emoji: '🌅', label: 'Early', time: 'before 10am' },
-  { key: 'brunch',        emoji: '☕', label: 'Brunch', time: '10am – 2pm' },
-  { key: 'afternoon',     emoji: '🌤', label: 'Afternoon', time: '2pm – 5pm' },
-  { key: 'dinner',        emoji: '🌆', label: 'Dinner', time: '5pm – 8pm' },
-  { key: 'late_night',    emoji: '🌙', label: 'Late', time: 'after 8pm' },
-]
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
 const EMOJIS = ['🦊','🐸','🦋','🐻','🦅','🐼','🦁','🐯','🦄','🐙','🐧','🦜','🐺','🦔','🐝','🐮','🐻‍❄️','🦩']
 
 export default function ProfilePage() {
   const { profile, loading, signOut } = useAuth()
   const router = useRouter()
   const { supported: pushSupported, subscription: pushSub, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePush(profile?.id)
-  const [availability, setAvailability] = useState({})
-  const [saving, setSaving] = useState(false)
+  const [gcalConnected, setGcalConnected] = useState(null)
   const [showSettings, setShowSettings] = useState(false)
   const [editName, setEditName] = useState('')
   const [editAvatar, setEditAvatar] = useState('')
@@ -80,9 +71,9 @@ export default function ProfilePage() {
     const supabase = createClient()
     const now = new Date().toISOString()
 
-    // Fetch availability + past hangouts in parallel
+    // Fetch GCal connection status + past hangouts in parallel
     Promise.all([
-      supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
+      supabase.from('google_tokens').select('user_id').eq('user_id', profile.id).maybeSingle(),
       // Past hangouts I hosted
       supabase.from('hangout_posts')
         .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
@@ -92,13 +83,8 @@ export default function ProfilePage() {
         .limit(30),
       // My past RSVPs (to find hangouts I attended but didn't host)
       supabase.from('rsvps').select('hangout_id').eq('user_id', profile.id),
-    ]).then(async ([{ data: availData }, { data: hosted }, { data: myRsvps }]) => {
-      // Availability
-      const avail = {}
-      for (const row of availData ?? []) {
-        avail[`${row.day_index}-${row.block}`] = row.available
-      }
-      setAvailability(avail)
+    ]).then(async ([{ data: tokenRow }, { data: hosted }, { data: myRsvps }]) => {
+      setGcalConnected(!!tokenRow)
 
       // Past attended hangouts (not hosted by me)
       const rsvpIds = (myRsvps ?? []).map(r => r.hangout_id)
@@ -126,20 +112,9 @@ export default function ProfilePage() {
     })
   }, [profile?.id])
 
-  async function toggleCell(dayIndex, block) {
-    if (!profile) return
-    const key = `${dayIndex}-${block}`
-    const next = !availability[key]
-    setAvailability(prev => ({ ...prev, [key]: next }))
-    setSaving(true)
-    const supabase = createClient()
-    await supabase.from('availability').upsert({
-      user_id: profile.id,
-      day_index: dayIndex,
-      block,
-      available: next,
-    })
-    setSaving(false)
+  async function handleDisconnectGcal() {
+    await disconnectGoogle()
+    setGcalConnected(false)
   }
 
   async function saveProfile() {
@@ -184,46 +159,44 @@ export default function ProfilePage() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-5 space-y-4 pb-28">
-        {/* availability editor */}
+        {/* Google Calendar connection */}
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">my availability</p>
-            {saving && <p className="text-xs text-violet-400">saving...</p>}
-          </div>
-
-          {/* day headers */}
-          <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: '72px repeat(7, 1fr)' }}>
-            <div />
-            {DAYS.map((d, i) => (
-              <div key={i} className="text-center text-[10px] font-semibold text-gray-400">{d}</div>
-            ))}
-          </div>
-
-          {/* block rows */}
-          {TIME_BLOCKS.map(({ key: block, emoji, label, time }) => (
-            <div key={block} className="grid gap-1 mb-1 items-center" style={{ gridTemplateColumns: '72px repeat(7, 1fr)' }}>
-              <div className="flex items-center gap-1.5 pr-1">
-                <span className="text-sm leading-none">{emoji}</span>
-                <div>
-                  <p className="text-[11px] font-semibold text-gray-600 leading-none">{label}</p>
-                  <p className="text-[9px] text-gray-400 leading-none mt-0.5">{time}</p>
-                </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center">
+                <CalendarDays size={17} className="text-gray-500" />
               </div>
-              {Array.from({ length: 7 }, (_, dayIndex) => {
-                const isFree = availability[`${dayIndex}-${block}`]
-                return (
-                  <motion.button
-                    key={dayIndex}
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => toggleCell(dayIndex, block)}
-                    className={`h-8 rounded-lg transition-colors ${isFree ? 'bg-emerald-400' : 'bg-gray-100'}`}
-                  />
-                )
-              })}
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Google Calendar</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {gcalConnected === null
+                    ? 'checking...'
+                    : gcalConnected
+                      ? 'connected — friends can see your free/busy'
+                      : 'connect so friends can see when you\'re free'}
+                </p>
+              </div>
             </div>
-          ))}
-
-          <p className="text-[10px] text-gray-400 text-center mt-2">green = free · tap to toggle</p>
+            {gcalConnected === true ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <CheckCircle2 size={16} className="text-emerald-500" />
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleDisconnectGcal}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-500"
+                >
+                  disconnect
+                </motion.button>
+              </div>
+            ) : gcalConnected === false ? (
+              <a
+                href="/api/auth/google"
+                className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-500 text-white shadow-sm shadow-violet-200"
+              >
+                connect
+              </a>
+            ) : null}
+          </div>
         </div>
 
         {/* archived hangouts */}

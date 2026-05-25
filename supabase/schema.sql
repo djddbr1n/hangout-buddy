@@ -29,6 +29,8 @@ create table public.hangout_posts (
   activity text,
   location text,
   date_time timestamptz not null,
+  duration_minutes int not null default 120,
+  min_people int default 1,
   max_people int not null default 2 check (max_people >= 2),
   status text not null default 'open' check (status in ('open','closed','cancelled')),
   is_surprise boolean not null default false,
@@ -119,6 +121,71 @@ create policy "availability_select" on public.availability for select to authent
 create policy "availability_insert" on public.availability for insert to authenticated
   with check (user_id = auth.uid());
 create policy "availability_upsert" on public.availability for update to authenticated
+  using (user_id = auth.uid());
+
+-- Google Calendar OAuth tokens
+create table public.google_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade unique,
+  access_token text not null,
+  refresh_token text,
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
+alter table public.google_tokens enable row level security;
+
+-- Users manage only their own tokens; server-side uses service role to read others
+create policy "google_tokens_select" on public.google_tokens for select to authenticated using (user_id = auth.uid());
+create policy "google_tokens_insert" on public.google_tokens for insert to authenticated with check (user_id = auth.uid());
+create policy "google_tokens_update" on public.google_tokens for update to authenticated using (user_id = auth.uid());
+create policy "google_tokens_delete" on public.google_tokens for delete to authenticated using (user_id = auth.uid());
+
+-- In-app notifications
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade,
+  type text not null check (type in ('invite','rsvp','friend_request','friend_accepted')),
+  actor_id uuid references public.profiles(id) on delete set null,
+  actor_name text,
+  hangout_id uuid references public.hangout_posts(id) on delete cascade,
+  hangout_title text,
+  read boolean not null default false,
+  created_at timestamptz default now()
+);
+
+-- Push subscriptions (Web Push / PWA)
+create table public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade,
+  endpoint text not null,
+  subscription jsonb not null,
+  created_at timestamptz default now(),
+  unique(user_id, endpoint)
+);
+
+-- ── RLS for new tables ─────────────────────────────────────────────────
+
+alter table public.notifications enable row level security;
+alter table public.push_subscriptions enable row level security;
+
+-- Notifications: only you see yours
+create policy "notifications_select" on public.notifications for select to authenticated
+  using (user_id = auth.uid());
+create policy "notifications_insert" on public.notifications for insert to authenticated
+  with check (true);
+create policy "notifications_update" on public.notifications for update to authenticated
+  using (user_id = auth.uid());
+
+-- Push subscriptions: only you manage yours
+create policy "push_subs_select" on public.push_subscriptions for select to authenticated
+  using (user_id = auth.uid());
+create policy "push_subs_insert" on public.push_subscriptions for insert to authenticated
+  with check (user_id = auth.uid());
+create policy "push_subs_delete" on public.push_subscriptions for delete to authenticated
+  using (user_id = auth.uid());
+-- upsert needs update policy too
+create policy "push_subs_update" on public.push_subscriptions for update to authenticated
   using (user_id = auth.uid());
 
 -- ── Trigger: auto-create profile on signup ────────────────────────────

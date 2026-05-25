@@ -15,7 +15,6 @@ import { sendPushToUser } from '@/app/actions'
 const _cachedProfileId = getCache('auth-profile')?.id
 
 function friendsKey(id) { return `friends-${id}` }
-function availKey(id)   { return `avail-${id}` }
 
 function FriendSkeleton() {
   return (
@@ -40,7 +39,6 @@ export default function FriendsPage() {
   const [pendingRequests, setPendingRequests] = useState(
     () => getCache(friendsKey(_cachedProfileId))?.pendingRequests ?? []
   )
-  const [friendAvailability, setFriendAvailability] = useState({})
   // What each friend has granted ME — separate from what I've granted them
   const [reverseAuthLevels, setReverseAuthLevels] = useState(
     () => getCache(friendsKey(_cachedProfileId))?.reverseAuthLevels ?? {}
@@ -106,38 +104,10 @@ export default function FriendsPage() {
       pendingRequests: pending ?? [],
       reverseAuthLevels: reverseMap,
     })
-
-    // Background-prefetch availability for every friend so their profile opens instantly
-    for (const f of accepted ?? []) {
-      prefetchAvailability(f.friend_id)
-    }
   }
 
-  // ── Availability: persisted in page-cache across tab switches ─────────────
-  async function prefetchAvailability(friendId) {
-    const cached = getCache(availKey(friendId))
-    if (cached) {
-      setFriendAvailability(prev => ({ ...prev, [friendId]: cached }))
-      return
-    }
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('availability')
-      .select('day_index,block,available')
-      .eq('user_id', friendId)
-    const avail = {}
-    for (const row of data ?? []) {
-      if (!avail[row.day_index]) avail[row.day_index] = {}
-      avail[row.day_index][row.block] = row.available
-    }
-    setCache(availKey(friendId), avail)
-    setFriendAvailability(prev => ({ ...prev, [friendId]: avail }))
-  }
-
-  // Called when opening a friend's profile — instant if prefetch already ran
   function openFriend(f) {
     setSelected({ friend: f.friend, friendship: f })
-    prefetchAvailability(f.friend_id)
   }
 
   async function acceptRequest(req) {
@@ -425,8 +395,7 @@ export default function FriendsPage() {
 
       <FriendProfileSheet
         friend={selected?.friend ?? null}
-        availability={selected ? (friendAvailability[selected.friend.id] ?? null) : null}
-        // canSeeAvailability = what THEY have granted ME (for showing their grid)
+        // canSeeAvailability = what THEY have granted ME (show their GCal)
         canSeeAvailability={selected ? reverseAuthLevels[selected.friend.id] === 'can_see_availability' : false}
         // myGrantLevel = what I have granted THEM (for the toggle UI)
         myGrantLevel={selected?.friendship.auth_level ?? 'invite_only'}
