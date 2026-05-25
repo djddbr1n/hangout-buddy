@@ -73,9 +73,10 @@ export function HangoutDetailSheet({
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             drag="y" dragConstraints={{ top: 0 }} dragElastic={{ top: 0, bottom: 0.3 }}
             onDragEnd={(_, { offset, velocity }) => { if (offset.y > 80 || velocity.y > 500) closeAll() }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[90vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[90vh] flex flex-col"
           >
-            <div className="flex justify-center pt-3 pb-0">
+            {/* handle — drag target only */}
+            <div className="flex justify-center pt-3 pb-0 shrink-0">
               <div className="w-10 h-1 rounded-full bg-gray-200" />
             </div>
 
@@ -114,6 +115,7 @@ export function HangoutDetailSheet({
               </div>
             </div>
 
+            <div className="overflow-y-auto flex-1" onPointerDownCapture={e => e.stopPropagation()}>
             <div className="px-5 py-4 space-y-5 pb-10">
 
               {/* ── meta chips ── */}
@@ -378,6 +380,7 @@ export function HangoutDetailSheet({
                 </div>
               )}
             </div>
+            </div>{/* end scrollable content */}
           </motion.div>
         </>
       )}

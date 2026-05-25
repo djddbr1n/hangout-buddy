@@ -378,6 +378,8 @@ export default function DashboardPage() {
 
   // ── Quick-create prefill ──────────────────────────────────────────────────
   function generatePrefill(timeBlock) {
+    // All times/hours are LOCAL to the user's device — new Date() in the browser
+    // always uses the user's timezone, so this is correct for everyone worldwide.
     const BLOCKS = {
       early_morning: { hour: 9,  min: 0,  ideas: ['morning coffee run', 'sunrise hike', 'farmers market trip', 'breakfast run', 'early yoga sesh'] },
       brunch:        { hour: 11, min: 0,  ideas: ['brunch run', 'mimosa brunch', 'bagel run', 'bottomless brunch', 'açaí bowl run'] },
@@ -385,30 +387,41 @@ export default function DashboardPage() {
       dinner:        { hour: 18, min: 30, ideas: ['dinner run', 'happy hour', 'cook together', 'sushi night', 'taco night', 'ramen run'] },
       late_night:    { hour: 21, min: 0,  ideas: ['poker night', 'movie night', 'late night ramen', 'karaoke night', 'bar crawl', 'night market run'] },
     }
-    const DEFAULT_IDEAS = ['matcha run', 'spontaneous adventure', 'chill hang', 'walk + coffee', 'picnic', 'bookstore trip', 'ice cream run']
 
     const now = new Date()
-    let hour, min, ideas
-    if (timeBlock && BLOCKS[timeBlock]) {
-      ;({ hour, min, ideas } = BLOCKS[timeBlock])
-    } else {
-      hour = Math.min(now.getHours() + 2, 21)
-      min  = 0
-      ideas = DEFAULT_IDEAS
-    }
-
-    const dt = new Date(now)
-    dt.setHours(hour, min, 0, 0)
-    if (dt <= now) dt.setDate(dt.getDate() + 1)
-
-    // Format for datetime-local input (local time, not UTC)
     const pad = n => String(n).padStart(2, '0')
-    const localStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`
+    const toInputStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)]
 
-    return {
-      title: ideas[Math.floor(Math.random() * ideas.length)],
-      date_time: localStr,
+    if (timeBlock && BLOCKS[timeBlock]) {
+      // Active filter: use that block's canonical time + ideas
+      const { hour, min, ideas } = BLOCKS[timeBlock]
+      const dt = new Date(now)
+      dt.setHours(hour, min, 0, 0)
+      if (dt <= now) dt.setDate(dt.getDate() + 1)
+      return { title: pick(ideas), date_time: toInputStr(dt) }
     }
+
+    // No filter: suggest 1 hour from now (on the hour), time-appropriate activities
+    const dt = new Date(now)
+    dt.setHours(now.getHours() + 1, 0, 0, 0)
+
+    // If we've rolled past midnight, switch to tomorrow 9am with morning ideas
+    if (dt.getDate() !== now.getDate()) {
+      dt.setDate(now.getDate() + 1)
+      dt.setHours(9, 0, 0, 0)
+      return { title: pick(BLOCKS.early_morning.ideas), date_time: toInputStr(dt) }
+    }
+
+    const h = dt.getHours()
+    let ideas
+    if      (h < 10) ideas = BLOCKS.early_morning.ideas
+    else if (h < 14) ideas = BLOCKS.brunch.ideas
+    else if (h < 17) ideas = BLOCKS.afternoon.ideas
+    else if (h < 21) ideas = BLOCKS.dinner.ideas
+    else             ideas = BLOCKS.late_night.ideas
+
+    return { title: pick(ideas), date_time: toInputStr(dt) }
   }
 
   function openQuickCreate() {
