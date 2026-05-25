@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Bell, ChevronDown } from 'lucide-react'
+import { Plus, Bell, ChevronDown, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { HangoutCard } from '@/components/hangout/HangoutCard'
@@ -13,121 +13,80 @@ import { useAuth } from '@/hooks/useAuth'
 import { createClient } from '@/lib/supabase-client'
 import { getCache, setCache } from '@/lib/page-cache'
 import { sendPushToUser, getFriendFreeBusy } from '@/app/actions'
+import { downloadICS } from '@/lib/ics'
+import { pickNotifTemplate } from '@/lib/notif-templates'
 
-// ── My Events: folded stack that expands ──────────────────────────────────────
-function MyEventsSection({ events, profile, friendIds, onOpen }) {
-  const [expanded, setExpanded] = useState(false)
+// ── My Events: single cohesive card with event rows ──────────────────────────
+function MyEventsSection({ events, profile, onOpen }) {
+  const [expanded, setExpanded] = useState(true)
   if (events.length === 0) return null
-
-  const peek = Math.min(events.length - 1, 2)
-  const top = events[0]
-  const isTopHosting = top.creator_id === profile.id
 
   return (
     <div className="mb-1">
-      {/* section header */}
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between px-1 mb-3 group"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">my events</span>
-          <span className="text-[11px] bg-gray-100 text-gray-500 rounded-full px-1.5 py-0.5 font-semibold">
-            {events.length}
-          </span>
-        </div>
-        <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown size={14} className="text-gray-400" />
-        </motion.div>
-      </button>
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* header row — tap to collapse */}
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-3.5 border-b border-gray-50"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">my events</span>
+            <span className="text-[11px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5 font-semibold leading-none">
+              {events.length}
+            </span>
+          </div>
+          <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown size={14} className="text-gray-400" />
+          </motion.div>
+        </button>
 
-      <AnimatePresence mode="wait">
-        {!expanded ? (
-          /* ── Collapsed: stacked card peek ── */
-          <motion.div
-            key="collapsed"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.1 } }}
-            className="relative cursor-pointer select-none"
-            style={{ paddingBottom: peek * 7 }}
-            onClick={() => setExpanded(true)}
-          >
-            {/* Ghost cards behind (bottom ones first) */}
-            {Array.from({ length: peek }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute inset-x-0 bottom-0 bg-white rounded-3xl border border-gray-100"
-                style={{
-                  height: 88,
-                  bottom: i * 7,
-                  transform: `scaleX(${1 - (peek - i) * 0.03})`,
-                  transformOrigin: 'bottom center',
-                  zIndex: i,
-                  opacity: 0.35 + i * 0.25,
-                }}
-              />
-            ))}
-
-            {/* Top card — compact preview */}
-            <div className="relative z-10 bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-5 pt-3.5 pb-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        isTopHosting
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {isTopHosting ? '🏠 hosting' : '✓ going'}
-                      </span>
-                      {events.length > 1 && (
-                        <span className="text-[11px] text-gray-400 font-medium">+{events.length - 1} more</span>
-                      )}
+        {/* event rows */}
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              {events.map((h, i) => {
+                const hosting   = h.creator_id === profile.id
+                const goingCount = h.rsvps?.filter(r => r.status === 'going').length ?? 0
+                return (
+                  <motion.button
+                    key={h.id}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => onOpen(h)}
+                    className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-gray-50 ${
+                      i < events.length - 1 ? 'border-b border-gray-50' : ''
+                    }`}
+                  >
+                    <span className="text-2xl shrink-0">{h.creator?.avatar_emoji ?? '👤'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm leading-snug truncate">{h.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {format(new Date(h.date_time), 'EEE, MMM d · h:mm a')}
+                      </p>
                     </div>
-                    <p className="font-bold text-gray-900 text-[15px] leading-snug">{top.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {format(new Date(top.date_time), 'EEE, MMM d · h:mm a')}
-                    </p>
-                  </div>
-                  <span className="text-2xl shrink-0">{top.creator?.avatar_emoji ?? '👤'}</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          /* ── Expanded: labeled full cards ── */
-          <motion.div
-            key="expanded"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.1 } }}
-            className="space-y-4"
-          >
-            {events.map((h, i) => {
-              const hosting = h.creator_id === profile.id
-              return (
-                <motion.div
-                  key={h.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                >
-                  <div className="flex items-center gap-1.5 mb-1.5 px-1">
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      hosting ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                    }`}>
-                      {hosting ? '🏠 hosting' : '✓ going'}
-                    </span>
-                  </div>
-                  <HangoutCard hangout={h} currentUser={profile} friendIds={friendIds} onOpen={onOpen} />
-                </motion.div>
-              )
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {goingCount > 0 && (
+                        <span className="text-[10px] text-gray-400">{goingCount} going</span>
+                      )}
+                      <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
+                        hosting ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {hosting ? '🏠 host' : '✓ going'}
+                      </span>
+                      <ChevronRight size={13} className="text-gray-300" />
+                    </div>
+                  </motion.button>
+                )
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   )
 }
@@ -142,6 +101,7 @@ export default function DashboardPage() {
   const [invitedHangoutIds, setInvitedHangoutIds] = useState(new Set())
   const [unreadCount, setUnreadCount] = useState(0)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [prefillData, setPrefillData] = useState(null)
   const [detailHangout, setDetailHangout] = useState(null)
   const [editHangout, setEditHangout] = useState(null)
 
@@ -285,7 +245,8 @@ export default function DashboardPage() {
         date_time: post.date_time,
         duration_minutes: post.duration_minutes ?? 120,
         min_people: post.min_people ?? 1,
-        max_people: post.max_people ?? 2,
+        max_people: post.max_people ?? 4,
+        allow_plus_ones: post.allow_plus_ones ?? false,
         status: 'open',
         is_surprise: post.is_surprise ?? false,
         surprise_options: post.surprise_options,
@@ -298,16 +259,62 @@ export default function DashboardPage() {
       const supabase2 = createClient()
       supabase2.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted')
         .then(({ data: friends }) => {
-          const timeStr = format(new Date(data.date_time), 'EEE MMM d · h:mm a')
           for (const { friend_id } of friends ?? []) {
-            sendPushToUser(
-              friend_id,
-              `${profile.name} posted a hangout`,
-              `"${data.title}" · ${timeStr}`,
-              `/dashboard?hangout=${data.id}`
-            ).catch(() => {})
+            // Each friend gets their own randomly-picked template
+            const { title: notifTitle, body: notifBody } = pickNotifTemplate({
+              posterName: profile.name,
+              title: data.title,
+              date_time: data.date_time,
+              max_people: data.max_people,
+            })
+            sendPushToUser(friend_id, notifTitle, notifBody, `/dashboard?hangout=${data.id}`).catch(() => {})
           }
         })
+    }
+  }
+
+  const handleInviteFriend = async (hangout, friendId) => {
+    const supabase = createClient()
+    const friend = friendProfiles[friendId]
+    await supabase.from('notifications').insert({
+      user_id: friendId,
+      type: 'invite',
+      actor_id: profile.id,
+      actor_name: profile.name,
+      hangout_id: hangout.id,
+      hangout_title: hangout.title,
+    })
+    sendPushToUser(
+      friendId,
+      `${profile.name} wants you at "${hangout.title}"`,
+      `${format(new Date(hangout.date_time), 'EEE MMM d · h:mm a')} — tap to see it`,
+      `/dashboard?hangout=${hangout.id}`
+    ).catch(() => {})
+  }
+
+  const handleDelete = async (hangoutId) => {
+    const hangout = hangouts.find(h => h.id === hangoutId)
+    const supabase = createClient()
+    await supabase.from('hangout_posts').delete().eq('id', hangoutId)
+    setHangouts(prev => prev.filter(h => h.id !== hangoutId))
+    setDetailHangout(null)
+
+    // Notify everyone who RSVPed going (except the host)
+    const goingRSVPs = (hangout?.rsvps ?? []).filter(r => r.status === 'going' && r.user_id !== profile.id)
+    for (const rsvp of goingRSVPs) {
+      supabase.from('notifications').insert({
+        user_id: rsvp.user_id,
+        type: 'canceled',
+        actor_id: profile.id,
+        actor_name: profile.name,
+        hangout_id: hangoutId,
+        hangout_title: hangout.title,
+      }).catch(() => {})
+      sendPushToUser(
+        rsvp.user_id,
+        `"${hangout.title}" was canceled`,
+        `${profile.name} called it off`,
+      ).catch(() => {})
     }
   }
 
@@ -324,6 +331,7 @@ export default function DashboardPage() {
         duration_minutes: post.duration_minutes ?? 120,
         min_people: post.min_people,
         max_people: post.max_people,
+        allow_plus_ones: post.allow_plus_ones ?? false,
         is_surprise: post.is_surprise,
         activity: post.activity,
       })
@@ -367,6 +375,46 @@ export default function DashboardPage() {
   }
 
   const hasActiveFilter = activeTimeBlock || filterFriendsGoing || filterHasSpots || filterToday
+
+  // ── Quick-create prefill ──────────────────────────────────────────────────
+  function generatePrefill(timeBlock) {
+    const BLOCKS = {
+      early_morning: { hour: 9,  min: 0,  ideas: ['morning coffee run', 'sunrise hike', 'farmers market trip', 'breakfast run', 'early yoga sesh'] },
+      brunch:        { hour: 11, min: 0,  ideas: ['brunch run', 'mimosa brunch', 'bagel run', 'bottomless brunch', 'açaí bowl run'] },
+      afternoon:     { hour: 14, min: 0,  ideas: ['boba run', 'museum day', 'park hang', 'thrift store trip', 'board game café', 'matcha run'] },
+      dinner:        { hour: 18, min: 30, ideas: ['dinner run', 'happy hour', 'cook together', 'sushi night', 'taco night', 'ramen run'] },
+      late_night:    { hour: 21, min: 0,  ideas: ['poker night', 'movie night', 'late night ramen', 'karaoke night', 'bar crawl', 'night market run'] },
+    }
+    const DEFAULT_IDEAS = ['matcha run', 'spontaneous adventure', 'chill hang', 'walk + coffee', 'picnic', 'bookstore trip', 'ice cream run']
+
+    const now = new Date()
+    let hour, min, ideas
+    if (timeBlock && BLOCKS[timeBlock]) {
+      ;({ hour, min, ideas } = BLOCKS[timeBlock])
+    } else {
+      hour = Math.min(now.getHours() + 2, 21)
+      min  = 0
+      ideas = DEFAULT_IDEAS
+    }
+
+    const dt = new Date(now)
+    dt.setHours(hour, min, 0, 0)
+    if (dt <= now) dt.setDate(dt.getDate() + 1)
+
+    // Format for datetime-local input (local time, not UTC)
+    const pad = n => String(n).padStart(2, '0')
+    const localStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`
+
+    return {
+      title: ideas[Math.floor(Math.random() * ideas.length)],
+      date_time: localStr,
+    }
+  }
+
+  function openQuickCreate() {
+    setPrefillData(generatePrefill(activeTimeBlock))
+    setSheetOpen(true)
+  }
 
   if (!profile) return null
 
@@ -466,7 +514,6 @@ export default function DashboardPage() {
               <MyEventsSection
                 events={myEvents}
                 profile={profile}
-                friendIds={friendIds}
                 onOpen={setDetailHangout}
               />
 
@@ -474,7 +521,14 @@ export default function DashboardPage() {
               {feedHangouts.length === 0 && myEvents.length === 0 ? (
                 <div className="text-center py-20">
                   <p className="font-semibold text-gray-500">nothing yet</p>
-                  <p className="text-sm mt-1 text-gray-400">post a hangout and see who's down</p>
+                  <p className="text-sm mt-1 text-gray-400">be the first to post something</p>
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={openQuickCreate}
+                    className="mt-4 px-4 py-2 rounded-2xl bg-violet-500 text-white text-sm font-semibold shadow-sm shadow-violet-200"
+                  >
+                    start one ✨
+                  </motion.button>
                 </div>
               ) : (
                 <div>
@@ -493,12 +547,22 @@ export default function DashboardPage() {
                     <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
                       <p className="text-2xl mb-2">🔍</p>
                       <p className="font-semibold text-gray-500 text-sm">no hangouts match</p>
-                      <button
-                        onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterHasSpots(false); setFilterToday(false) }}
-                        className="text-xs text-violet-500 font-medium mt-2"
-                      >
-                        clear filters
-                      </button>
+                      <div className="flex items-center justify-center gap-3 mt-3">
+                        <button
+                          onClick={() => { setActiveTimeBlock(null); setFilterFriendsGoing(false); setFilterHasSpots(false); setFilterToday(false) }}
+                          className="text-xs text-gray-400 font-medium"
+                        >
+                          clear filters
+                        </button>
+                        <span className="text-gray-200">·</span>
+                        <motion.button
+                          whileTap={{ scale: 0.96 }}
+                          onClick={openQuickCreate}
+                          className="text-xs text-violet-500 font-semibold"
+                        >
+                          start one ✨
+                        </motion.button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -527,16 +591,20 @@ export default function DashboardPage() {
         })()}
       </div>
 
-      <CreateHangoutSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onCreate={handleCreate} />
+      <CreateHangoutSheet open={sheetOpen} onClose={() => { setSheetOpen(false); setPrefillData(null) }} onCreate={handleCreate} prefill={prefillData} />
       <CreateHangoutSheet open={!!editHangout} onClose={() => setEditHangout(null)} editHangout={editHangout} onEdit={handleEdit} />
       <HangoutDetailSheet
         hangout={detailHangout}
         open={!!detailHangout}
         currentUser={profile}
         friendIds={friendIds}
+        friendProfiles={friendProfiles}
+        friendFreeBusy={friendFreeBusy}
         onClose={() => setDetailHangout(null)}
         onRSVP={handleRSVP}
         onEdit={h => { setDetailHangout(null); setEditHangout(h) }}
+        onDelete={handleDelete}
+        onInviteFriend={handleInviteFriend}
       />
     </div>
   )

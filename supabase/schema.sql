@@ -35,6 +35,7 @@ create table public.hangout_posts (
   status text not null default 'open' check (status in ('open','closed','cancelled')),
   is_surprise boolean not null default false,
   surprise_options text[],
+  allow_plus_ones boolean not null default false,
   created_at timestamptz default now()
 );
 

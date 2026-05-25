@@ -1,12 +1,12 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, MapPin, Calendar, Sparkles } from 'lucide-react'
+import { X, MapPin, Calendar, Sparkles, Users } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { PeoplePicker } from './PeoplePicker'
 import { SurpriseSpinner } from './SurpriseSpinner'
 
-export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdit }) {
+export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdit, prefill }) {
   const isEdit = !!editHangout
 
   const DURATIONS = [
@@ -24,7 +24,8 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
   const [location, setLocation] = useState('')
   const [dateTime, setDateTime] = useState('')
   const [duration, setDuration] = useState(120)
-  const [peopleSetting, setPeopleSetting] = useState({ expected: 3, min: 2, max: 4 })
+  const [maxPeople, setMaxPeople] = useState(4)
+  const [allowPlusOnes, setAllowPlusOnes] = useState(false)
   const [isSurprise, setIsSurprise] = useState(false)
   const [selectedSurprise, setSelectedSurprise] = useState()
 
@@ -36,17 +37,26 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
       setDateTime(editHangout.date_time ? new Date(editHangout.date_time).toISOString().slice(0, 16) : '')
       setDuration(editHangout.duration_minutes ?? 120)
       setIsSurprise(editHangout.is_surprise ?? false)
-      const max = editHangout.max_people ?? 4
-      const min = editHangout.min_people ?? Math.max(1, max - 1)
-      const expected = Math.round((min + max) / 2)
-      setPeopleSetting({ expected, min, max })
+      setMaxPeople(editHangout.max_people ?? 4)
+      setAllowPlusOnes(editHangout.allow_plus_ones ?? false)
     }
   }, [editHangout])
+
+  // Apply prefill when sheet opens with suggested data
+  useEffect(() => {
+    if (open && prefill && !isEdit) {
+      setTitle(prefill.title ?? '')
+      setDateTime(prefill.date_time ?? '')
+      setLocation(prefill.location ?? '')
+      setDuration(prefill.duration ?? 120)
+    }
+  }, [open, prefill])
 
   const reset = () => {
     setTitle(''); setDescription(''); setLocation(''); setDateTime('')
     setDuration(120)
-    setPeopleSetting({ expected: 3, min: 2, max: 4 })
+    setMaxPeople(4)
+    setAllowPlusOnes(false)
     setIsSurprise(false); setSelectedSurprise(undefined)
   }
 
@@ -58,8 +68,9 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
       location: isSurprise ? undefined : location,
       date_time: new Date(dateTime).toISOString(),
       duration_minutes: duration,
-      min_people: peopleSetting.min,
-      max_people: peopleSetting.max,
+      min_people: 1,
+      max_people: maxPeople,
+      allow_plus_ones: allowPlusOnes,
       is_surprise: isSurprise,
       activity: isSurprise ? selectedSurprise : undefined,
     }
@@ -94,7 +105,17 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
 
             <div className="px-5 pb-8 space-y-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">{isEdit ? 'edit hangout' : 'new hangout'}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-gray-900">{isEdit ? 'edit hangout' : 'new hangout'}</h2>
+                  {!isEdit && prefill && (
+                    <button
+                      onClick={reset}
+                      className="text-xs text-gray-400 font-medium px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      clear fields
+                    </button>
+                  )}
+                </div>
                 <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
                   <X size={18} className="text-gray-400" />
                 </button>
@@ -122,7 +143,12 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5"><Calendar size={12} /> when?</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5"><Calendar size={12} /> when?</label>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  </span>
+                </div>
                 <input
                   type="datetime-local"
                   value={dateTime}
@@ -189,7 +215,28 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
               </AnimatePresence>
 
               <div className="bg-gray-50 rounded-2xl p-4">
-                <PeoplePicker value={peopleSetting} onChange={setPeopleSetting} />
+                <PeoplePicker value={maxPeople} onChange={setMaxPeople} />
+              </div>
+
+              {/* Allow attendees to invite friends */}
+              <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                <div>
+                  <p className="font-medium text-sm text-gray-800 flex items-center gap-1.5">
+                    <Users size={14} className="text-violet-500" /> open invites
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">going attendees can invite their own friends too</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAllowPlusOnes(v => !v)}
+                  className={`w-12 h-6 rounded-full transition-colors shrink-0 ${allowPlusOnes ? 'bg-violet-500' : 'bg-gray-200'}`}
+                >
+                  <motion.div
+                    animate={{ x: allowPlusOnes ? 24 : 2 }}
+                    className="w-5 h-5 rounded-full bg-white shadow-sm"
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                </button>
               </div>
 
               <motion.button
