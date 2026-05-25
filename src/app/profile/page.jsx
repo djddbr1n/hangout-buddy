@@ -4,20 +4,25 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, Settings, X, Bell, BellOff, Smartphone, ChevronDown, Archive } from 'lucide-react'
+import { LogOut, Settings, X, Bell, BellOff, Smartphone, ChevronDown, Archive, ChevronRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-client'
 import { usePush } from '@/hooks/usePush'
+import { HangoutDetailSheet } from '@/components/hangout/HangoutDetailSheet'
 
-function PastHangoutCard({ hangout, profileId }) {
-  const isHost  = hangout.creator_id === profileId
-  const myRsvp  = hangout.rsvps?.find(r => r.user_id === profileId)
+function PastHangoutCard({ hangout, profileId, onOpen }) {
+  const isHost    = hangout.creator_id === profileId
+  const myRsvp    = hangout.rsvps?.find(r => r.user_id === profileId)
   const wentCount = hangout.rsvps?.filter(r => r.status === 'going').length ?? 0
 
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
+    <motion.button
+      whileTap={{ scale: 0.98 }}
+      onClick={() => onOpen(hangout)}
+      className="w-full flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0 text-left"
+    >
       <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-lg shrink-0">
         {hangout.creator?.avatar_emoji ?? '👤'}
       </div>
@@ -28,15 +33,16 @@ function PastHangoutCard({ hangout, profileId }) {
           {wentCount > 0 && ` · ${wentCount} went`}
         </p>
       </div>
-      <div className="shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {isHost && (
           <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">hosted</span>
         )}
         {!isHost && myRsvp?.status === 'going' && (
           <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">went</span>
         )}
+        <ChevronRight size={13} className="text-gray-300" />
       </div>
-    </div>
+    </motion.button>
   )
 }
 
@@ -65,6 +71,7 @@ export default function ProfilePage() {
   const [profileSaving, setProfileSaving] = useState(false)
   const [pastHangouts, setPastHangouts] = useState([])
   const [showArchive, setShowArchive] = useState(false)
+  const [selectedPast, setSelectedPast] = useState(null)
 
   useEffect(() => {
     if (!profile) return
@@ -78,7 +85,7 @@ export default function ProfilePage() {
       supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
       // Past hangouts I hosted
       supabase.from('hangout_posts')
-        .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(user_id,status)')
+        .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
         .eq('creator_id', profile.id)
         .lt('date_time', now)
         .order('date_time', { ascending: false })
@@ -99,7 +106,7 @@ export default function ProfilePage() {
       if (rsvpIds.length > 0) {
         const { data } = await supabase
           .from('hangout_posts')
-          .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(user_id,status)')
+          .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
           .in('id', rsvpIds)
           .neq('creator_id', profile.id)
           .lt('date_time', now)
@@ -109,7 +116,11 @@ export default function ProfilePage() {
       }
 
       // Merge, dedupe, sort newest first
+      // Only keep events whose end time (start + duration) has passed
+      const nowMs = Date.now()
+      const hasEnded = h => new Date(h.date_time).getTime() + (h.duration_minutes ?? 120) * 60_000 <= nowMs
       const merged = [...(hosted ?? []), ...attended]
+        .filter(hasEnded)
         .sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
       setPastHangouts(merged)
     })
@@ -253,7 +264,12 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     pastHangouts.map(h => (
-                      <PastHangoutCard key={h.id} hangout={h} profileId={profile.id} />
+                      <PastHangoutCard
+                        key={h.id}
+                        hangout={h}
+                        profileId={profile.id}
+                        onOpen={setSelectedPast}
+                      />
                     ))
                   )}
                 </div>
@@ -397,6 +413,18 @@ export default function ProfilePage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* past hangout detail sheet */}
+      <HangoutDetailSheet
+        hangout={selectedPast}
+        open={!!selectedPast}
+        currentUser={profile}
+        friendIds={[]}
+        onClose={() => setSelectedPast(null)}
+        onRSVP={null}
+        onEdit={null}
+        isPast
+      />
     </div>
   )
 }

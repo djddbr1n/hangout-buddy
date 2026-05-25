@@ -9,10 +9,21 @@ import { SurpriseSpinner } from './SurpriseSpinner'
 export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdit }) {
   const isEdit = !!editHangout
 
+  const DURATIONS = [
+    { label: '30m',     value: 30  },
+    { label: '1h',      value: 60  },
+    { label: '1.5h',    value: 90  },
+    { label: '2h',      value: 120 },
+    { label: '3h',      value: 180 },
+    { label: '4h',      value: 240 },
+    { label: 'all day', value: 480 },
+  ]
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [dateTime, setDateTime] = useState('')
+  const [duration, setDuration] = useState(120)
   const [peopleSetting, setPeopleSetting] = useState({ expected: 3, min: 2, max: 4 })
   const [isSurprise, setIsSurprise] = useState(false)
   const [selectedSurprise, setSelectedSurprise] = useState()
@@ -23,6 +34,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
       setDescription(editHangout.description ?? '')
       setLocation(editHangout.location ?? '')
       setDateTime(editHangout.date_time ? new Date(editHangout.date_time).toISOString().slice(0, 16) : '')
+      setDuration(editHangout.duration_minutes ?? 120)
       setIsSurprise(editHangout.is_surprise ?? false)
       const max = editHangout.max_people ?? 4
       const min = editHangout.min_people ?? Math.max(1, max - 1)
@@ -33,6 +45,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
 
   const reset = () => {
     setTitle(''); setDescription(''); setLocation(''); setDateTime('')
+    setDuration(120)
     setPeopleSetting({ expected: 3, min: 2, max: 4 })
     setIsSurprise(false); setSelectedSurprise(undefined)
   }
@@ -44,6 +57,7 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
       description,
       location: isSurprise ? undefined : location,
       date_time: new Date(dateTime).toISOString(),
+      duration_minutes: duration,
       min_people: peopleSetting.min,
       max_people: peopleSetting.max,
       is_surprise: isSurprise,
@@ -113,6 +127,27 @@ export function CreateHangoutSheet({ open, onClose, onCreate, editHangout, onEdi
                   onChange={e => setDateTime(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">how long?</label>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {DURATIONS.map(d => (
+                    <motion.button
+                      key={d.value}
+                      type="button"
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setDuration(d.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        duration === d.value
+                          ? 'bg-violet-500 text-white shadow-sm shadow-violet-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {d.label}
+                    </motion.button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center justify-between bg-violet-50 rounded-2xl px-4 py-3">

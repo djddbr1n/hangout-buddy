@@ -169,6 +169,8 @@ export default function DashboardPage() {
       supabase.from('friendships').select('friend_id').eq('user_id', profile.id).eq('status', 'accepted'),
       supabase.from('hangout_posts')
         .select('*, creator:profiles!creator_id(id,name,nickname,avatar_emoji), rsvps(*, user:profiles!user_id(id,name,nickname,avatar_emoji))')
+        // fetch up to 8 h in the past so ongoing events stay visible
+        .gte('date_time', new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString())
         .order('date_time', { ascending: true }),
       supabase.from('availability').select('day_index,block,available').eq('user_id', profile.id),
       supabase.from('notifications').select('hangout_id').eq('user_id', profile.id).eq('type', 'invite').not('hangout_id', 'is', null),
@@ -246,6 +248,7 @@ export default function DashboardPage() {
         activity: post.activity,
         location: post.location,
         date_time: post.date_time,
+        duration_minutes: post.duration_minutes ?? 120,
         min_people: post.min_people ?? 1,
         max_people: post.max_people ?? 2,
         status: 'open',
@@ -277,6 +280,7 @@ export default function DashboardPage() {
         description: post.description,
         location: post.location,
         date_time: post.date_time,
+        duration_minutes: post.duration_minutes ?? 120,
         min_people: post.min_people,
         max_people: post.max_people,
         is_surprise: post.is_surprise,
@@ -400,13 +404,16 @@ export default function DashboardPage() {
 
       <div className="max-w-md mx-auto px-4 pb-32">
         {(() => {
-          const myEvents = hangouts.filter(h =>
+          const now = new Date()
+          const hangoutEndTime = h => new Date(new Date(h.date_time).getTime() + (h.duration_minutes ?? 120) * 60_000)
+          const upcomingHangouts = hangouts.filter(h => hangoutEndTime(h) > now)
+          const myEvents = upcomingHangouts.filter(h =>
             h.creator_id === profile.id ||
             h.rsvps?.some(r => r.user_id === profile.id && r.status === 'going')
           )
           const myEventIds = new Set(myEvents.map(h => h.id))
           // Apply filters only to the feed (my events always visible)
-          const feedHangouts = hangouts
+          const feedHangouts = upcomingHangouts
             .filter(h => !myEventIds.has(h.id))
             .filter(matchesFilters)
 

@@ -7,7 +7,7 @@ import { RSVPButtons } from './RSVPButtons'
 import { SurpriseSpinner } from './SurpriseSpinner'
 
 
-export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onClose, onRSVP, onEdit }) {
+export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onClose, onRSVP, onEdit, isPast }) {
   if (!hangout) return null
 
   const goingRSVPs = hangout.rsvps?.filter(r => r.status === 'going') ?? []
@@ -65,6 +65,9 @@ export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onCl
                   <Clock size={14} className="text-gray-400" />
                   <span className="text-sm text-gray-700 font-medium">
                     {format(new Date(hangout.date_time), 'EEEE, MMM d · h:mm a')}
+                    {hangout.duration_minutes
+                      ? ` – ${format(new Date(new Date(hangout.date_time).getTime() + hangout.duration_minutes * 60_000), 'h:mm a')}`
+                      : ''}
                   </span>
                 </div>
                 {hangout.is_surprise ? (
@@ -171,8 +174,13 @@ export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onCl
                 )}
               </div>
 
-              {/* RSVP */}
-              {!isMine && hangout.status === 'open' && (
+              {/* RSVP — hidden for past events */}
+              {isPast ? (
+                <div className="flex items-center justify-center gap-2 py-3 px-4 bg-gray-50 rounded-2xl">
+                  <span className="text-base">📦</span>
+                  <p className="text-sm text-gray-400 font-medium">this hangout has passed</p>
+                </div>
+              ) : !isMine && hangout.status === 'open' ? (
                 <div className="pt-1">
                   <RSVPButtons
                     hangoutId={hangout.id}
@@ -181,7 +189,7 @@ export function HangoutDetailSheet({ hangout, open, currentUser, friendIds, onCl
                     onRSVP={onRSVP}
                   />
                 </div>
-              )}
+              ) : null}
             </div>
           </motion.div>
         </>
