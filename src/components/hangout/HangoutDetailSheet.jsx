@@ -425,8 +425,8 @@ export function HangoutDetailSheet({
                 </div>
               )}
             </div>
-            </div>{/* end scrollable content */}
-            )}{/* end details tab */}
+            </div>
+            )}
           </motion.div>
         </>
       )}
